@@ -12,7 +12,7 @@
 这是一个全自动的 **Cloudflare CDN 节点优选工具docker版**。它通过 **TCP 延迟筛选** + **IP 可用性二次检测** + **HTTP 延迟及抖动检测** + **真实带宽测速** 多重机制，从多个公开数据源中聚合节点，自动识别并解析任意格式（标准代码、中文名、emoji国旗、JSON等），筛选出当前网络环境下速度最快、延迟最低、抖动最小的 Cloudflare IP，并支持**自动更新至 Cloudflare DNS** 以及**同步至 GitHub 仓库**，同时支持微信实时通知。
 
 > [!IMPORTANT]
-> 本项目基于https://github.com/kanchairen-d/cfnb改DOCKER化
+> 本项目基于https://github.com/kanchairen-d/cfnb，DOCKER化改造
 > 新增自动同步edt等等功能，带界面更直观！
 
 ---
