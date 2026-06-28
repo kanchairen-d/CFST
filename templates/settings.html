@@ -1,0 +1,927 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-4xl mx-auto">
+  <div class="flex items-center justify-between mb-6">
+    <h2 class="text-xl font-bold">设置</h2>
+    <div class="flex gap-2">
+      <button onclick="restoreDefaults()" class="px-4 py-2 text-sm rounded-lg" style="color:var(--text-muted);border:1px solid var(--glass-border)">↩ 恢复默认</button>
+      <button onclick="saveAllGroups()" class="btn-primary px-5 py-2 text-sm rounded-lg">💾 全部保存</button>
+    </div>
+  </div>
+
+<div id="settings-container" class="space-y-5"></div>
+</div>
+
+<script>
+// ===== Field group definitions =====
+const GROUPS = [
+  { title: '📡 数据源', fields: ['ADDITIONAL_SOURCES'] },
+  { title: '⏰ 自动测速', fields: ['_SCHEDULE'] },
+  { title: '📤 GitHub 同步', fields: ['_GITHUB'] },
+  { title: '🔄 Edgetunnel 同步', fields: ['_EDGETUNNEL'] },
+  { title: '💬 推送通知', fields: ['ENABLE_WXPUSHER','WXPUSHER_APP_TOKEN','WXPUSHER_UIDS','WXPUSHER_API_URL','ENABLE_PUSHPLUS','PUSHPLUS_TOKEN','NOTIFY_TIMEOUT','NOTIFY_CONNECT_TIMEOUT','_WX_NOTIFY_HELP'] },
+  { title: '⚙️ 基本设置', fields: ['USE_GLOBAL_MODE','GLOBAL_TOP_N','PER_COUNTRY_TOP_N','TCP_PROBES','TCP_LATENCY_WEIGHT','MIN_SUCCESS_RATE','TIMEOUT','SOCKET_DEFAULT_TIMEOUT','PROGRESS_PRINT_INTERVAL'] },
+  { title: '🚧 前置过滤', fields: ['PRE_FILTER_PORT_ENABLED','PRE_FILTER_PORTS','PRE_FILTER_BLOCKED_ENABLED','PRE_FILTER_BLOCKED_COUNTRIES','FILTER_COUNTRIES_ENABLED','ALLOWED_COUNTRIES'] },
+  { title: '🌐 DNS 过滤', fields: ['FILTER_IPV6_AVAILABILITY','FILTER_BLOCKED_COUNTRIES_ENABLED','BLOCKED_COUNTRIES','DNS_IP_RISK_FILTER_ENABLED','DNS_IP_RISK_MAX_LEVEL'] },
+  { title: '📡 HTTP 检测', fields: ['HTTP_TEST_ENABLED','HTTP_TEST_TIMEOUT','HTTP_TEST_CONNECT_TIMEOUT','HTTP_TEST_MAX_ROUNDS','HTTP_TEST_ROUND_DELAY','HTTP_TEST_INNER_RETRY_ENABLED','HTTP_TEST_MAX_RETRIES','HTTP_TEST_RETRY_DELAY','HTTP_TEST_METHOD','HTTP_LATENCY_WEIGHT','JITTER_WEIGHT','HTTP_JITTER_SAMPLES','HTTP_TEST_WORKERS'] },
+  { title: '🚀 带宽测速', fields: ['BANDWIDTH_SIZE_MB','BANDWIDTH_TIMEOUT','BANDWIDTH_RETRY_MAX','BANDWIDTH_RETRY_DELAY','BANDWIDTH_URL_TEMPLATE','BANDWIDTH_PROCESS_BUFFER','BANDWIDTH_CONNECT_TIMEOUT','SPEED_WEIGHT','BANDWIDTH_CANDIDATES','BANDWIDTH_WORKERS'] },
+  { title: '✅ 可用性检测', fields: ['TEST_AVAILABILITY','AVAILABILITY_CHECK_API','AVAILABILITY_TIMEOUT','AVAILABILITY_CONNECT_TIMEOUT','AVAILABILITY_RETRY_MAX','AVAILABILITY_RETRY_DELAY','AVAILABILITY_INNER_RETRY_ENABLED','AVAILABILITY_INNER_RETRY_MAX','AVAILABILITY_INNER_RETRY_DELAY','AVAILABILITY_WORKERS'] },
+  { title: '📍 IP 地区校准', fields: ['IP_CALIBRATION_ENABLED','IP_CALIBRATION_TOKENS','IP_CALIBRATION_MIN_INTERVAL','IP_CALIBRATION_CONCURRENCY'] },
+  { title: '🔀 并发与重试', fields: ['MAX_WORKERS','FALLBACK_WORKERS','HTTP_TEST_WORKERS','BANDWIDTH_WORKERS','FETCH_MAX_RETRIES','FETCH_RETRY_DELAY','FETCH_TIMEOUT','FETCH_CONNECT_TIMEOUT','DNS_UPDATE_MAX_RETRIES','DNS_UPDATE_RETRY_DELAY','GITHUB_SYNC_MAX_RETRIES','GITHUB_SYNC_RETRY_DELAY','GIT_SYNC_PROCESS_TIMEOUT'] },
+  { title: '📋 输出设置', fields: ['OUTPUT_FILE','ENABLE_LOGGING','LOG_FILE','FORCE_DIRECT','IP_TXT_SHOW_BANDWIDTH','IP_TXT_SHOW_HTTP_LATENCY','IP_TXT_SHOW_HTTP_JITTER','IP_TXT_SHOW_LATENCY','AD_HEADER_ENABLED','AD_HEADER_LINES','AD_FOOTER_ENABLED','AD_FOOTER_LINES','AD_PERLINE_ENABLED','AD_PERLINE_TEXT'] },
+  { title: '☁️ Cloudflare DNS', fields: ['CF_ENABLED','CF_API_TOKEN','CF_ZONE_ID','CF_DNS_RECORD_NAME','CF_TTL','CF_PROXIED','CF_DNS_CONNECT_TIMEOUT','CF_DNS_READ_TIMEOUT','DNS_RECORD_TYPE','DNS_UPDATE_TARGET_COUNT'] },
+];
+
+// ===== Labels =====
+const LABELS = {
+  USE_GLOBAL_MODE:'全局模式',GLOBAL_TOP_N:'全局最优节点数',PER_COUNTRY_TOP_N:'每国最优节点数',
+  TCP_PROBES:'TCP探测次数',TCP_LATENCY_WEIGHT:'TCP延迟权重',MIN_SUCCESS_RATE:'最低成功率',TIMEOUT:'TCP超时(秒)','SOCKET_DEFAULT_TIMEOUT':'Socket超时(秒)',PROGRESS_PRINT_INTERVAL:'进度刷新间隔(秒)',
+  PRE_FILTER_PORT_ENABLED:'端口过滤',PRE_FILTER_PORTS:'允许端口',
+  PRE_FILTER_BLOCKED_ENABLED:'前置黑名单',PRE_FILTER_BLOCKED_COUNTRIES:'屏蔽国家',
+  FILTER_COUNTRIES_ENABLED:'前置白名单',ALLOWED_COUNTRIES:'白名单国家',
+  TEST_AVAILABILITY:'可用性检测',AVAILABILITY_CHECK_API:'检测API地址（多个自动轮询）',
+  AVAILABILITY_TIMEOUT:'API读取超时(秒)',AVAILABILITY_CONNECT_TIMEOUT:'API连接超时(秒)',
+  AVAILABILITY_RETRY_MAX:'重试轮数',AVAILABILITY_RETRY_DELAY:'重试间隔(秒)',
+  AVAILABILITY_INNER_RETRY_ENABLED:'内部重试',AVAILABILITY_INNER_RETRY_MAX:'内部重试次数',
+  AVAILABILITY_INNER_RETRY_DELAY:'内部重试间隔(秒)',
+  HTTP_TEST_ENABLED:'HTTP检测',HTTP_TEST_TIMEOUT:'读取超时(秒)',
+  HTTP_TEST_CONNECT_TIMEOUT:'连接超时(秒)',HTTP_TEST_MAX_ROUNDS:'重试轮数',
+  HTTP_TEST_ROUND_DELAY:'轮间隔(秒)',HTTP_TEST_INNER_RETRY_ENABLED:'内部重试',
+  HTTP_TEST_MAX_RETRIES:'重试次数',HTTP_TEST_RETRY_DELAY:'重试间隔(秒)',
+  HTTP_TEST_METHOD:'请求方法',HTTP_LATENCY_WEIGHT:'延迟权重',JITTER_WEIGHT:'抖动权重',
+  HTTP_JITTER_SAMPLES:'抖动采样次数',
+  BANDWIDTH_SIZE_MB:'文件大小(MB)',BANDWIDTH_TIMEOUT:'超时(秒)',
+  BANDWIDTH_RETRY_MAX:'重试轮数',BANDWIDTH_RETRY_DELAY:'重试间隔(秒)',
+  BANDWIDTH_URL_TEMPLATE:'测速URL模板',BANDWIDTH_PROCESS_BUFFER:'进程缓冲(秒)',
+  BANDWIDTH_CONNECT_TIMEOUT:'连接超时(秒)',SPEED_WEIGHT:'带宽权重',
+  BANDWIDTH_CANDIDATES:'带宽测速候选数',
+  CF_ENABLED:'DNS更新启用',CF_API_TOKEN:'CF API Token',CF_ZONE_ID:'CF Zone ID',
+  CF_DNS_RECORD_NAME:'DNS记录名',CF_TTL:'DNS TTL',CF_PROXIED:'CDN代理模式',
+  CF_DNS_CONNECT_TIMEOUT:'API连接超时(秒)',CF_DNS_READ_TIMEOUT:'API读取超时(秒)',
+  DNS_RECORD_TYPE:'记录类型',DNS_UPDATE_TARGET_COUNT:'DNS更新数量',
+  FILTER_IPV6_AVAILABILITY:'过滤IPv6',FILTER_BLOCKED_COUNTRIES_ENABLED:'DNS黑名单',
+  BLOCKED_COUNTRIES:'黑名单国家',DNS_IP_RISK_FILTER_ENABLED:'IP风险过滤',
+  DNS_IP_RISK_MAX_LEVEL:'最高风险等级',
+  ENABLE_WXPUSHER:'WxPusher 通知',WXPUSHER_APP_TOKEN:'APP Token',WXPUSHER_UIDS:'UID',ENABLE_PUSHPLUS:'PushPlus 通知',PUSHPLUS_TOKEN:'PushPlus Token',
+  WXPUSHER_API_URL:'API地址',NOTIFY_TIMEOUT:'读取超时(秒)',NOTIFY_CONNECT_TIMEOUT:'连接超时(秒)',
+  IP_CALIBRATION_ENABLED:'地区校准',IP_CALIBRATION_TOKENS:'Token（ipinfo.io）',IP_CALIBRATION_MIN_INTERVAL:'最小间隔(秒)',
+  IP_CALIBRATION_CONCURRENCY:'校准并发数',
+  MAX_WORKERS:'TCP并发数',AVAILABILITY_WORKERS:'可用性检测并发',FALLBACK_WORKERS:'备用查询并发',
+  HTTP_TEST_WORKERS:'HTTP检测并发',BANDWIDTH_WORKERS:'带宽测速并发',
+  FETCH_MAX_RETRIES:'获取重试次数',FETCH_RETRY_DELAY:'获取重试间隔(秒)',
+  FETCH_TIMEOUT:'获取超时(秒)',FETCH_CONNECT_TIMEOUT:'获取连接超时(秒)',
+  DNS_UPDATE_MAX_RETRIES:'DNS更新重试',DNS_UPDATE_RETRY_DELAY:'DNS重试间隔(秒)',
+  GITHUB_SYNC_MAX_RETRIES:'GitHub同步重试',GITHUB_SYNC_RETRY_DELAY:'同步间隔(秒)',
+  GIT_SYNC_PROCESS_TIMEOUT:'Git进程超时(秒)',
+  OUTPUT_FILE:'输出文件名',ENABLE_LOGGING:'运行日志',LOG_FILE:'日志文件名',
+  FORCE_DIRECT:'强制直连',
+  IP_TXT_SHOW_BANDWIDTH:'显示带宽',IP_TXT_SHOW_HTTP_LATENCY:'显示HTTP延迟',
+  IP_TXT_SHOW_HTTP_JITTER:'显示抖动',IP_TXT_SHOW_LATENCY:'显示TCP延迟',
+  AD_HEADER_ENABLED:'头部广告',AD_HEADER_LINES:'头部广告内容',
+  AD_FOOTER_ENABLED:'尾部广告',AD_FOOTER_LINES:'尾部广告内容',
+  AD_PERLINE_ENABLED:'行尾追加',AD_PERLINE_TEXT:'追加文本',
+  ADDITIONAL_SOURCES:'IP 数据源',
+};
+
+let CONFIG = {};
+
+// ===== Type detection =====
+function ftype(key, val) {
+  if (typeof val === 'boolean') return 'bool';
+  if (Array.isArray(val)) return 'list';
+  if (typeof val === 'number') return Number.isInteger(val) ? 'int' : 'float';
+  const lk = key.toLowerCase();
+  if (lk.includes('token')||lk.includes('secret')||lk.includes('password')||lk.includes('key')) return 'password';
+  return 'text';
+}
+
+// ===== Render a single field =====
+function renderField(key, val) {
+  const t = ftype(key, val);
+  const label = LABELS[key]||key;
+  const id = 'f_'+key;
+
+  // Special: ADDITIONAL_SOURCES
+  if (key === 'ADDITIONAL_SOURCES') {
+    CONFIG[key] = val || [];
+    let h = `<div class="py-1" data-key="${key}"><label class="block text-sm mb-2">${label}</label>`;
+    h += `<div class="space-y-2" id="${id}">${renderSources(val||[])}`;
+    h += `<div class="flex gap-2 mt-2">
+      <input type="url" id="${id}_url" class="input-field flex-1 px-3 py-1.5 text-sm" placeholder="输入数据源 URL" onkeydown="if(event.key==='Enter'){event.preventDefault();addSource()}">
+      <button onclick="addSource()" class="px-3 py-1.5 text-xs rounded-lg" style="background:var(--accent);color:#fff">添加</button>
+    </div></div></div>`;
+    return h;
+  }
+
+  // Special: IP_CALIBRATION_TOKENS
+  if (key === 'IP_CALIBRATION_TOKENS') {
+    CONFIG[key] = val || [];
+    let h = `<div class="py-1" data-key="${key}"><label class="block text-sm mb-1">${label}</label><p class="text-xs mb-2" style="color:var(--text-muted)">去 <a href="https://ipinfo.io/" target="_blank" style="color:var(--accent)">ipinfo.io</a> 注册获取免费 Token，每月 5 万次查询额度，多个会自动轮询</p>`;
+    h += `<div class="space-y-2" id="${id}">${(CONFIG[key]||[]).map((tk,i)=>`
+      <div class="flex gap-2 items-center">
+        <div class="relative flex-1">
+          <input type="password" class="input-field w-full px-3 py-1.5 text-sm font-mono pr-8" value="${tk.replace(/"/g,'&quot;')}" onchange="updateCalToken(${i},this.value)">
+          <button type="button" onclick="togglePW(this)" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-sm leading-none cursor-pointer" style="color:var(--text-muted)">👁</button>
+        </div>
+        <button onclick="rmCalToken(${i})" class="text-xs px-2 py-1 rounded shrink-0" style="color:var(--danger);border:1px solid var(--danger)">删除</button>
+      </div>`).join('')}</div>`;
+    h += `<button onclick="addCalToken()" class="px-3 py-1.5 text-xs rounded-lg" style="background:var(--accent);color:#fff">➕ 添加 Token</button></div>`;
+    return h;
+  }
+
+  // Special: AVAILABILITY_CHECK_API - multiple URLs with failover
+  if (key === 'AVAILABILITY_CHECK_API') {
+    CONFIG[key] = val || [];
+    let h = `<div class="py-1" data-key="${key}"><label class="block text-sm mb-1">${label}</label>`;
+    h += `<div class="text-xs mb-2" style="color:var(--text-muted)">多个检测 URL，按顺序使用，第一个成功后不再尝试后面的</div>`;
+    h += `<div class="space-y-2" id="${id}">${(CONFIG[key]||[]).map((url,i)=>`
+      <div class="flex gap-2 items-center">
+        <input type="text" class="input-field flex-1 px-3 py-1.5 text-sm font-mono" value="${url.replace(/"/g,'&quot;')}" onchange="updateAvailUrl(${i},this.value)">
+        <button onclick="rmAvailUrl(${i})" class="text-xs px-2 py-1 rounded shrink-0" style="color:var(--danger);border:1px solid var(--danger)">删除</button>
+      </div>`).join('')}</div>`;
+    h += '<div class="flex gap-2 mt-2"><input type="text" id="'+id+'_inp" class="input-field flex-1 px-3 py-1.5 text-sm" placeholder="输入检测 API URL"><button onclick="addAvailUrl(this.dataset.id)" data-id="'+id+'" class="px-3 py-1.5 text-xs rounded-lg" style="background:var(--accent);color:#fff">➕ 添加</button></div></div>';
+    return h;
+  }
+
+  // Special: WXPUSHER_UIDS - single UID input (stored as array for backend)
+  if (key === 'WXPUSHER_UIDS') {
+    const uid = (Array.isArray(val) && val.length > 0) ? val[0] : '';
+    CONFIG[key] = [uid];
+    return `<div class="py-1" data-key="${key}">
+      <label class="block text-sm mb-1">${label}</label>
+      <input type="text" id="${id}" class="input-field w-full px-3 py-1.5 text-sm font-mono"
+        value="${uid.replace(/"/g,'&quot;')}" placeholder="输入 WxPusher UID"
+        onchange="CONFIG['${key}']=[this.value.trim()]">
+    </div>`;
+  }
+
+  // Special: _WX_NOTIFY_HELP
+  if (key === '_WX_NOTIFY_HELP') {
+    return `<details class="rounded-lg p-3 cursor-pointer" style="background:var(--bg-page);border:1px solid var(--glass-border)">
+      <summary class="text-xs font-medium">📖 推送通知配置说明</summary>
+      <div class="mt-2 text-xs space-y-2" style="color:var(--text-muted);line-height:1.6">
+        <div class="mb-1"><b style="color:var(--text)">WxPusher</b> 和 <b style="color:var(--text)">PushPlus</b> 二选一即可，开启哪个就用哪个推送</div>
+        <div class="mt-1.5"><b style="color:var(--text)">WxPusher：</b></div>
+        <div>APP Token 在 <a href="https://wxpusher.zjiecode.com/" target="_blank" style="color:var(--accent)">wxpusher.zjiecode.com</a> 创建应用获取</div>
+        <div>下载 wxpusher App 登录并获取 UID</div>
+        <div class="mt-1.5"><b style="color:var(--text)">PushPlus：</b></div>
+        <div>Token 在 <a href="https://www.pushplus.plus/" target="_blank" style="color:var(--accent)">pushplus.plus</a> 扫码登录后获取，无需 UID</div>
+      </div>
+    </details>`;
+  }
+
+  // Special: _SCHEDULE, _GITHUB, _EDGETUNNEL (sentinel fields for custom sections)
+  if (key === '_SCHEDULE') {
+    return `<div class="space-y-4" id="schedule-section"></div>`;
+  }
+  if (key === '_GITHUB') {
+    return `<div class="space-y-4" id="github-section"></div>`;
+  }
+  if (key === '_EDGETUNNEL') {
+    return `<div class="space-y-4" id="edgetunnel-section"></div>`;
+  }
+
+  if (t === 'bool') {
+    return `<div class="flex items-center justify-between px-3 py-2 rounded-lg" style="background:var(--bg-page);border:1px solid var(--glass-border);border-radius:0.625rem" data-key="${key}">
+      <span class="text-sm font-medium">${label}</span>
+      <label class="toggle"><input type="checkbox" id="${id}" ${val?'checked':''}><span class="toggle-track"></span></label>
+    </div>`;
+  }
+  let input = '';
+  if (t==='list') {
+    const arr = val||[];
+    const arrStr = JSON.stringify(arr).replace(/'/g,"&#39;");
+    input = `<div class="flex flex-wrap gap-1.5 mb-1.5" id="${id}_tags">${
+      arr.map((v,i)=>`<span class="tag">${v}<button onclick="rmTag('${id}',${i})">&times;</button></span>`).join('')
+    }</div>
+    <div class="flex gap-2"><input type="text" class="input-field flex-1 px-3 py-1.5 text-sm" id="${id}_inp"
+      placeholder="输入后按回车添加" onkeydown="if(event.key==='Enter'){event.preventDefault();addTag('${id}')}">
+      <button onclick="addTag('${id}')" class="px-3 py-1.5 text-xs rounded-lg" style="background:var(--accent);color:#fff">添加</button>
+      ${arr.length>0?`<button onclick="clrTag('${id}')" class="px-3 py-1.5 text-xs rounded-lg" style="color:var(--danger);border:1px solid var(--danger)">清空</button>`:''}
+    </div>`;
+  } else if (t==='int') {
+    input = `<input type="number" step="1" id="${id}" value="${val}" class="input-field w-full px-3 py-1.5 text-sm">`;
+  } else if (t==='float') {
+    input = `<input type="number" step="0.1" id="${id}" value="${val}" class="input-field w-full px-3 py-1.5 text-sm">`;
+  } else if (t==='password') {
+    input = `<div class="relative"><input type="password" id="${id}" value="${typeof val==='string'?val.replace(/"/g,'&quot;'):''}" class="input-field w-full px-3 py-1.5 text-sm font-mono pr-8"><button type="button" onclick="togglePW(this)" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-sm leading-none cursor-pointer" style="color:var(--text-muted)">👁</button></div>`;
+  } else {
+    input = `<input type="text" id="${id}" value="${typeof val==='string'?val.replace(/"/g,'&quot;'):''}" class="input-field w-full px-3 py-1.5 text-sm">`;
+  }
+  return `<div class="py-1.5" data-key="${key}">
+    <label class="block text-sm mb-1">${label}</label>
+    ${input}
+  </div>`;
+}
+
+// ===== Tag helpers =====
+function renderTagsInner(key) {
+  const arr = CONFIG[key] || [];
+  return arr.map((v,i)=>`<span class="tag">${v}<button onclick="rmTag('f_'+'${key}',${i})">&times;</button></span>`).join('');
+}
+function findTagContainer(id) {
+  return document.getElementById(id) || document.getElementById(id+'_tags') || null;
+}
+function addTag(id) {
+  const inp = document.getElementById(id+'_inp'); if(!inp)return;
+  const v = inp.value.trim(); if(!v)return;
+  const container = findTagContainer(id);
+  if (!container) return;
+  const key = container.closest('[data-key]')?.dataset.key;
+  if (!key) return;
+  if (!CONFIG[key]||!Array.isArray(CONFIG[key])) CONFIG[key]=[];
+  CONFIG[key].push(v);
+  inp.value='';
+  container.innerHTML = renderTagsInner(key);
+}
+function rmTag(id, idx) {
+  const container = findTagContainer(id);
+  if (!container) return;
+  const key = container.closest('[data-key]')?.dataset.key;
+  if (!key) return;
+  if (!CONFIG[key]||!Array.isArray(CONFIG[key])) return;
+  CONFIG[key].splice(idx,1);
+  container.innerHTML = renderTagsInner(key);
+}
+function clrTag(id) {
+  const container = findTagContainer(id);
+  if (!container) return;
+  const key = container.closest('[data-key]')?.dataset.key;
+  if (!key) return;
+  CONFIG[key]=[];
+  container.innerHTML = '';
+}
+
+// ===== ADDITIONAL_SOURCES helpers =====
+function renderSources(arr) {
+  const id = 'f_ADDITIONAL_SOURCES';
+  CONFIG['ADDITIONAL_SOURCES'] = arr;
+  return arr.map((s, i) => {
+    const en = s.enabled !== false;
+    return `<div class="flex items-center gap-3 p-2.5 rounded-lg" style="background:var(--input-bg);border:1px solid var(--glass-border)">
+      <code class="flex-1 text-xs break-all" style="color:var(--text)">${(s.url||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</code>
+      <label class="toggle"><input type="checkbox" onchange="toggleSource(${i})" ${en?'checked':''}><span class="toggle-track"></span></label>
+      <button onclick="rmSource(${i})" class="text-xs px-2 py-1 rounded" style="color:var(--danger);border:1px solid var(--danger)">删除</button>
+    </div>`;
+  }).join('');
+}
+function addSource() {
+  const u = document.getElementById('f_ADDITIONAL_SOURCES_url');
+  const url = u.value.trim(); if(!url) return;
+  if (!CONFIG['ADDITIONAL_SOURCES']) CONFIG['ADDITIONAL_SOURCES'] = [];
+  CONFIG['ADDITIONAL_SOURCES'].push({url, enabled: true});
+  u.value = '';
+  document.getElementById('f_ADDITIONAL_SOURCES').innerHTML = renderSources(CONFIG['ADDITIONAL_SOURCES']) + `
+    <div class="flex gap-2 mt-2">
+      <input type="url" id="f_ADDITIONAL_SOURCES_url" class="input-field flex-1 px-3 py-1.5 text-sm" placeholder="输入数据源 URL" onkeydown="if(event.key==='Enter'){event.preventDefault();addSource()}">
+      <button onclick="addSource()" class="px-3 py-1.5 text-xs rounded-lg" style="background:var(--accent);color:#fff">添加</button>
+    </div>`;
+}
+function rmSource(idx) {
+  if (!CONFIG['ADDITIONAL_SOURCES']) return;
+  CONFIG['ADDITIONAL_SOURCES'].splice(idx, 1);
+  document.getElementById('f_ADDITIONAL_SOURCES').innerHTML = renderSources(CONFIG['ADDITIONAL_SOURCES']) + `
+    <div class="flex gap-2 mt-2">
+      <input type="url" id="f_ADDITIONAL_SOURCES_url" class="input-field flex-1 px-3 py-1.5 text-sm" placeholder="输入数据源 URL" onkeydown="if(event.key==='Enter'){event.preventDefault();addSource()}">
+      <button onclick="addSource()" class="px-3 py-1.5 text-xs rounded-lg" style="background:var(--accent);color:#fff">添加</button>
+    </div>`;
+}
+
+// ===== IP Calibration Tokens =====
+function tokensRefresh() {
+  CONFIG['IP_CALIBRATION_TOKENS'] = Array.from(document.querySelectorAll('#f_IP_CALIBRATION_TOKENS input')).map(inp => inp.value);
+}
+function addCalToken() {
+  if (!CONFIG['IP_CALIBRATION_TOKENS']) CONFIG['IP_CALIBRATION_TOKENS'] = [];
+  CONFIG['IP_CALIBRATION_TOKENS'].push('');
+  const el = document.getElementById('f_IP_CALIBRATION_TOKENS');
+  if (el) el.innerHTML = tokensHtml(CONFIG['IP_CALIBRATION_TOKENS']);
+}
+function rmCalToken(idx) {
+  if (!CONFIG['IP_CALIBRATION_TOKENS']) return;
+  CONFIG['IP_CALIBRATION_TOKENS'].splice(idx, 1);
+  const el = document.getElementById('f_IP_CALIBRATION_TOKENS');
+  if (el) el.innerHTML = tokensHtml(CONFIG['IP_CALIBRATION_TOKENS']);
+}
+function tokensHtml(arr) {
+  return (arr||[]).map((tk,i) => `
+    <div class="flex gap-2 items-center">
+      <div class="relative flex-1">
+        <input type="password" class="input-field w-full px-3 py-1.5 text-sm font-mono pr-8" value="${(tk||'').replace(/"/g,'&quot;')}" onchange="tokensRefresh()">
+        <button type="button" onclick="togglePW(this)" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-sm leading-none cursor-pointer" style="color:var(--text-muted)">👁</button>
+      </div>
+      <button onclick="rmCalToken(${i})" class="text-xs px-2 py-1 rounded shrink-0" style="color:var(--danger);border:1px solid var(--danger)">删除</button>
+    </div>
+  `).join('');
+}
+
+// ===== AVAILABILITY_CHECK_API helpers =====
+function renderAvailUrls() {
+  const key = 'AVAILABILITY_CHECK_API';
+  const arr = CONFIG[key] || [];
+  const id = 'f_'+key;
+  let h = (arr||[]).map((url,i) => `
+    <div class="flex gap-2 items-center">
+      <input type="text" class="input-field flex-1 px-3 py-1.5 text-sm font-mono" value="${url.replace(/"/g,'&quot;')}" onchange="updateAvailUrl(${i},this.value)">
+      <button onclick="rmAvailUrl(${i})" class="text-xs px-2 py-1 rounded shrink-0" style="color:var(--danger);border:1px solid var(--danger)">\u2716</button>
+    </div>`).join('');
+  const el = document.getElementById(id);
+  if (el) el.innerHTML = h;
+}
+
+function addAvailUrl(id) {
+  const inp = document.getElementById(id+'_inp');
+  if (!inp || !inp.value.trim()) return;
+  const key = 'AVAILABILITY_CHECK_API';
+  if (!CONFIG[key] || !Array.isArray(CONFIG[key])) CONFIG[key] = [];
+  CONFIG[key].push(inp.value.trim());
+  inp.value = '';
+  renderAvailUrls();
+}
+
+function rmAvailUrl(idx) {
+  const key = 'AVAILABILITY_CHECK_API';
+  if (!CONFIG[key] || !Array.isArray(CONFIG[key])) return;
+  CONFIG[key].splice(idx, 1);
+  renderAvailUrls();
+}
+
+function updateAvailUrl(i, v) {
+  const key = 'AVAILABILITY_CHECK_API';
+  if (!CONFIG[key] || !Array.isArray(CONFIG[key])) CONFIG[key] = [];
+  CONFIG[key][i] = v;
+}
+
+function toggleSource(idx) {
+  const cb = document.getElementById('f_ADDITIONAL_SOURCES').querySelectorAll('input[type="checkbox"]');
+  if (cb && cb[idx] && CONFIG['ADDITIONAL_SOURCES'] && CONFIG['ADDITIONAL_SOURCES'][idx]) {
+    CONFIG['ADDITIONAL_SOURCES'][idx].enabled = cb[idx].checked;
+  }
+}
+
+// ===== Collect all field values =====
+function collect() {
+  const out = {};
+  document.querySelectorAll('[data-key]').forEach(div => {
+    const key = div.dataset.key;
+    const el = div.querySelector('input:not(.tag-input)');
+    if (!el) return;
+    if (el.type === 'checkbox') { out[key] = el.checked; return; }
+    if (el.type === 'number') { out[key] = parseFloat(el.value); return; }
+    out[key] = el.value;
+  });
+  // Tag fields from CONFIG
+  Object.entries(CONFIG).forEach(([k,v]) => {
+    if (Array.isArray(v)) out[k] = v;
+  });
+  return out;
+}
+
+// ===== Schedule =====
+async function loadSchedule() {
+  try {
+    const r = await fetch('/api/schedule');
+    const s = await r.json();
+    const weekdays = ['周一','周二','周三','周四','周五','周六','周日'];
+    let daysHtml = weekdays.map((d, i) =>
+      `<label class="inline-flex items-center gap-1 text-xs cursor-pointer"><input type="checkbox" class="sch-day" value="${i}" ${(s.days||[]).includes(i)?'checked':''}> ${d}</label>`
+    ).join('');
+    document.getElementById('schedule-section').innerHTML = `
+      <div class="flex items-center justify-between px-3 py-2 rounded-lg" style="background:var(--bg-page);border:1px solid var(--glass-border)">
+        <span class="text-sm font-medium">启用定时测速</span>
+        <label class="toggle"><input type="checkbox" id="sch_enabled" ${s.enabled?'checked':''}>
+        <span class="toggle-track"></span></label>
+      </div>
+      <div id="sch_details">
+        <div class="flex gap-3 mb-3">
+          <label class="flex items-center gap-1.5 text-sm cursor-pointer"><input type="radio" name="sch_type" value="daily" ${s.type==='daily'?'checked':''} onchange="schToggle()"> 每天</label>
+          <label class="flex items-center gap-1.5 text-sm cursor-pointer"><input type="radio" name="sch_type" value="weekly" ${s.type==='weekly'?'checked':''} onchange="schToggle()"> 每周</label>
+          <label class="flex items-center gap-1.5 text-sm cursor-pointer"><input type="radio" name="sch_type" value="interval" ${s.type==='interval'?'checked':''} onchange="schToggle()"> 间隔</label>
+        </div>
+        <div id="sch_time_row" ${s.type==='interval'?'style="display:none"':''}>
+          <label class="block text-sm mb-1">执行时间</label>
+          <input type="time" id="sch_time" value="${s.time||'08:00'}" class="input-field px-3 py-1.5 text-sm">
+        </div>
+        <div id="sch_days_row" ${s.type!=='weekly'?'style="display:none"':''}>
+          <label class="block text-sm mb-1.5">选择日期</label>
+          <div class="flex flex-wrap gap-2">${daysHtml}</div>
+        </div>
+        <div id="sch_interval_row" ${s.type!=='interval'?'style="display:none"':''}>
+          <label class="block text-sm mb-1">间隔小时数</label>
+          <input type="number" id="sch_interval" value="${s.interval_hours||4}" min="1" max="168" class="input-field px-3 py-1.5 text-sm w-24">
+        </div>
+      </div>
+      <div class="flex items-center justify-between px-3 py-2 rounded-lg" style="background:var(--bg-page);border:1px solid var(--glass-border)">
+        <span class="text-sm font-medium">测速后同步最近一次 <span class="text-xs" style="color:var(--text-muted)">（EDT + GitHub）</span></span>
+        <label class="toggle"><input type="checkbox" id="sch_auto_sync" ${s.auto_sync_after_test?'checked':''}>
+        <span class="toggle-track"></span></label>
+      </div>
+      <div class="flex items-center justify-between px-3 py-2 rounded-lg" style="background:var(--bg-page);border:1px solid var(--glass-border)">
+        <span class="text-sm font-medium">测速后合并历史检测并同步 <span class="text-xs" style="color:var(--text-muted)">（去重+测活→EDT+GitHub）</span></span>
+        <label class="toggle"><input type="checkbox" id="sch_collect_sync" ${s.collect_sync_after_test?'checked':''}>
+        <span class="toggle-track"></span></label>
+      </div>
+      <div class="flex gap-3">
+        <button onclick="saveSchedule()" class="btn-primary px-4 py-1.5 text-sm rounded-lg">💾 保存</button>
+        <span class="text-xs self-center" style="color:var(--text-muted)" id="sch_status">上次: ${s.last_run?new Date(s.last_run).toLocaleString('zh-CN'):'从未'}</span>
+      </div>`;
+  } catch(e) {
+    document.getElementById('schedule-section').innerHTML = '<div class="text-red-500 text-sm">加载失败</div>';
+  }
+}
+
+function schToggle() {
+  const t = document.querySelector('input[name="sch_type"]:checked')?.value;
+  document.getElementById('sch_time_row').style.display = t==='interval'?'none':'block';
+  document.getElementById('sch_days_row').style.display = t==='weekly'?'block':'none';
+  document.getElementById('sch_interval_row').style.display = t==='interval'?'block':'none';
+}
+
+async function saveSchedule() {
+  const days = [...document.querySelectorAll('.sch-day:checked')].map(cb => parseInt(cb.value));
+  const data = {
+    enabled: document.getElementById('sch_enabled').checked,
+    type: document.querySelector('input[name="sch_type"]:checked')?.value || 'daily',
+    time: document.getElementById('sch_time')?.value || '08:00',
+    days: days,
+    interval_hours: parseInt(document.getElementById('sch_interval')?.value) || 4,
+    auto_sync_after_test: document.getElementById('sch_auto_sync')?.checked || false,
+    collect_sync_after_test: document.getElementById('sch_collect_sync')?.checked || false,
+  };
+  try {
+    const r = await fetch('/api/schedule', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    const d = await r.json();
+    showToast(d.ok ? '✅ 定时配置已保存' : '❌ '+(d.error||'失败'));
+  } catch(e) { showToast('❌ 网络错误'); }
+}
+
+// ===== GitHub Sync =====
+async function loadGitHub() {
+  try {
+    const r = await fetch('/api/config');
+    const cfg = await r.json();
+    document.getElementById('github-section').innerHTML = `
+      <div class="flex items-center justify-between px-3 py-2 rounded-lg mb-3" style="background:var(--bg-page);border:1px solid var(--glass-border)">
+        <span class="text-sm font-medium">启用 GitHub 同步</span>
+        <label class="toggle"><input type="checkbox" id="gh_enabled" ${cfg.GITHUB_SYNC_ENABLED?'checked':''}>
+        <span class="toggle-track"></span></label>
+      </div>
+      <p class="text-xs mb-3" style="color:var(--text-muted)">测速完成后自动 git push ip.txt 到 GitHub 仓库</p>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs mb-1" style="color:var(--text-muted)">Personal Access Token</label>
+          <div class="relative">
+            <input type="password" id="gh_token" class="input-field w-full px-3 py-1.5 text-sm font-mono pr-8" value="${(cfg.GITHUB_TOKEN||'').replace(/"/g,'&quot;')}" placeholder="ghp_xxxxxxxxxxxx">
+            <button type="button" onclick="togglePW(this)" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-sm leading-none cursor-pointer" style="color:var(--text-muted)" title="显示/隐藏">👁</button>
+          </div>
+        </div>
+        <div>
+          <label class="block text-xs mb-1" style="color:var(--text-muted)">用户名</label>
+          <input type="text" id="gh_user" class="input-field w-full px-3 py-1.5 text-sm" value="${(cfg.GITHUB_USERNAME||'').replace(/"/g,'&quot;')}" placeholder="your-github-username">
+        </div>
+        <div>
+          <label class="block text-xs mb-1" style="color:var(--text-muted)">仓库名</label>
+          <input type="text" id="gh_repo" class="input-field w-full px-3 py-1.5 text-sm" value="${(cfg.GITHUB_REPO||'').replace(/"/g,'&quot;')}" placeholder="your-repo-name">
+        </div>
+        <div>
+          <label class="block text-xs mb-1" style="color:var(--text-muted)">分支</label>
+          <input type="text" id="gh_branch" class="input-field w-full px-3 py-1.5 text-sm" value="${(cfg.GITHUB_BRANCH||'main').replace(/"/g,'&quot;')}" placeholder="main">
+        </div>
+      </div>
+      <div class="flex gap-2 pt-2">
+        <button onclick="saveGitHub()" class="btn-primary px-4 py-1.5 text-sm rounded-lg">💾 保存</button>
+        <button onclick="syncGithubNow()" class="px-3 py-1.5 text-sm rounded-lg" style="color:#3b82f6;border:1px solid #3b82f6;background:rgba(59,130,246,0.08)">🔄 同步最近一次测速</button>
+        <button onclick="collectSyncGithub()" class="px-3 py-1.5 text-sm rounded-lg" style="color:#22c55e;border:1px solid #22c55e;background:rgba(34,197,94,0.08)">📋 合并历史检测并同步</button>
+      </div>
+      <div id="gh_msg" class="text-xs mt-1" style="color:var(--text-muted)"></div>`;
+  } catch(e) {
+    document.getElementById('github-section').innerHTML = '<div class="text-red-500 text-sm">加载失败</div>';
+  }
+}
+
+async function saveGitHub() {
+  try {
+    const r = await fetch('/api/config');
+    const cfg = await r.json();
+    cfg.GITHUB_SYNC_ENABLED = document.getElementById('gh_enabled')?.checked || false;
+    cfg.GITHUB_TOKEN = document.getElementById('gh_token')?.value || '';
+    cfg.GITHUB_USERNAME = document.getElementById('gh_user')?.value || '';
+    cfg.GITHUB_REPO = document.getElementById('gh_repo')?.value || '';
+    cfg.GITHUB_BRANCH = document.getElementById('gh_branch')?.value || 'main';
+    const r2 = await fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(cfg)});
+    const d = await r2.json();
+    document.getElementById('gh_msg').textContent = d.ok ? '✅ 已保存' : '❌ '+(d.error||'失败');
+  } catch(e) { document.getElementById('gh_msg').textContent = '❌ 网络错误'; }
+}
+
+// ===== Load and render =====
+async function loadConfig() {
+  try {
+    const r = await fetch('/api/config');
+    CONFIG = await r.json();
+    // Filter out _comment keys
+    const filtered = {};
+    Object.entries(CONFIG).forEach(([k,v]) => { if (!k.startsWith('_')) filtered[k]=v; });
+    CONFIG = filtered;
+
+    const container = document.getElementById('settings-container');
+    container.innerHTML = GROUPS.map((g, gi) => `
+      <div class="glass rounded-xl">
+        <div class="px-5 py-3.5 flex items-center justify-between cursor-pointer select-none" style="border-bottom:1px solid var(--glass-border)" onclick="toggleGroup(this)">
+          <h3 class="font-semibold text-sm">${g.title}</h3>
+          <span class="text-xs" style="color:var(--text-muted)">展开</span>
+        </div>
+        <div class="p-5 space-y-1" style="display:none">
+          ${g.fields.map(k => (CONFIG[k]!==undefined||k.startsWith('_'))?renderField(k,CONFIG[k]):'').join('')}
+          ${g.fields.length===1 && g.fields[0].startsWith('_') ? '' : '<div class="pt-3"><button onclick="saveGroup('+gi+')" class="px-4 py-1.5 text-sm rounded-lg btn-primary">💾 保存</button></div>'}
+        </div>
+      </div>
+    `).join('');
+  } catch(e) {
+    document.getElementById('settings-container').innerHTML = `<div class="glass rounded-xl p-5 text-red-500 text-sm">加载失败: ${e.message}</div>`;
+  }
+}
+
+// ===== Collapsible groups =====
+function toggleGroup(header) {
+  const body = header.nextElementSibling;
+  if (!body) return;
+  const isHidden = body.style.display === 'none';
+  body.style.display = isHidden ? 'block' : 'none';
+  const label = header.querySelector('span.text-xs');
+  if (label) label.textContent = isHidden ? '收起' : '展开';
+}
+
+// ===== Save single group =====
+function saveGroup(gi) {
+  const g = GROUPS[gi];
+  if (!g) return;
+  const data = {};
+  const body = document.querySelectorAll('#settings-container > .glass > .p-5')[gi];
+  if (!body) return;
+  g.fields.forEach(k => {
+    if (k.startsWith('_')) return;
+    const el = document.getElementById('f_'+k);
+    if (el) {
+      if (el.type === 'checkbox') { data[k] = el.checked; return; }
+      if (el.type === 'number') { data[k] = parseFloat(el.value); return; }
+    }
+    // Tag-based array fields (no direct element): read from CONFIG
+    if (Array.isArray(CONFIG[k])) { data[k] = CONFIG[k]; return; }
+    if (!el) return;
+    data[k] = el.value;
+  });
+  // Also include ADDITIONAL_SOURCES, IP_CALIBRATION_TOKENS, AVAILABILITY_CHECK_API from CONFIG
+  // Refresh DOM values first so user's inline edits aren't lost
+  if (g.fields.includes('AVAILABILITY_CHECK_API')) {
+    const key = 'AVAILABILITY_CHECK_API';
+    // Read all URL inputs directly from DOM (flat structure, no nesting)
+    const container = document.getElementById('f_'+key);
+    if (container) {
+      CONFIG[key] = Array.from(container.querySelectorAll('input[type="text"]')).map(inp => inp.value).filter(v => v);
+    }
+    data[key] = CONFIG[key] || [];
+  }
+  if (g.fields.includes('IP_CALIBRATION_TOKENS')) {
+    tokensRefresh();
+    data['IP_CALIBRATION_TOKENS'] = CONFIG['IP_CALIBRATION_TOKENS'] || [];
+  }
+  if (g.fields.includes('WXPUSHER_UIDS')) {
+    const el = document.getElementById('f_WXPUSHER_UIDS');
+    if (el) data['WXPUSHER_UIDS'] = [el.value.trim()];
+  }
+  if (g.fields.includes('ADDITIONAL_SOURCES')) {
+    // Re-read source toggle states from DOM
+    const container = document.getElementById('f_ADDITIONAL_SOURCES');
+    if (container) {
+      const cbs = container.querySelectorAll('input[type="checkbox"]');
+      (CONFIG['ADDITIONAL_SOURCES'] || []).forEach((s, i) => {
+        if (cbs[i]) s.enabled = cbs[i].checked;
+      });
+    }
+    data['ADDITIONAL_SOURCES'] = CONFIG['ADDITIONAL_SOURCES'] || [];
+  }
+  fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)})
+    .then(r => r.json())
+    .then(d => showToast(d.ok ? '✅ 已保存' : '❌ '+(d.error||'失败')))
+    .catch(() => showToast('❌ 网络错误'));
+}
+
+async function saveAllGroups() {
+  tokensRefresh();
+  // Refresh AVAILABILITY_CHECK_API from DOM
+  const acKey = 'AVAILABILITY_CHECK_API';
+  const acContainer = document.getElementById('f_'+acKey);
+  if (acContainer) {
+    CONFIG[acKey] = Array.from(acContainer.querySelectorAll('input[type="text"]')).map(inp => inp.value).filter(v => v);
+  }
+  // Also refresh ADDITIONAL_SOURCES toggle states
+  const asContainer = document.getElementById('f_ADDITIONAL_SOURCES');
+  if (asContainer) {
+    const cbs = asContainer.querySelectorAll('input[type="checkbox"]');
+    (CONFIG['ADDITIONAL_SOURCES'] || []).forEach((s, i) => {
+      if (cbs[i]) s.enabled = cbs[i].checked;
+    });
+  }
+  const data = collect();
+  try {
+    const r = await fetch('/api/config', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    const d = await r.json();
+    showToast(d.ok ? '✅ 全部已保存' : '❌ '+(d.error||'保存失败'));
+  } catch(e) { showToast('❌ 网络错误'); }
+}
+
+// ===== Edgetunnel =====
+async function loadEdgetunnel() {
+  try {
+    const r = await fetch('/api/edgetunnel/config');
+    const cfg = await r.json();
+    const endpoints = cfg.EDGETUNNEL_ENDPOINTS || [];
+    const egId = 'edgetunnel-section';
+
+    let listHtml = endpoints.map((ep, i) => {
+      const isKv = ep.type === 'kv';
+      return `
+      <div class="rounded-lg p-3" style="background:var(--input-bg);border:1px solid var(--glass-border)" data-epidx="${i}">
+        <div class="flex items-center gap-2 mb-2">
+          <select onchange="toggleEpMode(${i},this.value)" class="text-xs px-2 py-1 rounded" style="background:var(--bg-page);border:1px solid var(--glass-border);color:var(--text)">
+            <option value="http" ${isKv?'':'selected'}>📡 HTTP</option>
+            <option value="kv" ${isKv?'selected':''}>☁️ KV</option>
+          </select>
+          <span class="text-xs" style="color:var(--text-muted)">端点 #${i+1}</span>
+          <div class="ml-auto flex items-center gap-2">
+            <label class="toggle"><input type="checkbox" ${ep.enabled!==false?'checked':''} onchange="updateEpField(${i},'enabled',this.checked)"><span class="toggle-track"></span></label>
+            <button onclick="deleteEp(${i})" class="text-xs px-2 py-1 rounded" style="color:var(--danger);border:1px solid var(--danger)">删除</button>
+          </div>
+        </div>
+        <div class="space-y-2 http-fields" ${isKv?'style="display:none"':''}>
+          <input type="url" class="input-field w-full px-3 py-1.5 text-sm" value="${(ep.url||'').replace(/"/g,'&quot;')}" placeholder="https://你的域名.com" onchange="updateEpField(${i},'url',this.value)">
+          <div class="relative">
+            <input type="password" class="input-field w-full px-3 py-1.5 text-sm font-mono pr-8" value="${(ep.password||'').replace(/"/g,'&quot;')}" placeholder="管理密码" onchange="updateEpField(${i},'password',this.value)">
+            <button type="button" onclick="togglePw(this)" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-sm leading-none cursor-pointer" style="color:var(--text-muted)" title="显示/隐藏密码">👁</button>
+          </div>
+        </div>
+        <div class="space-y-2 kv-fields" ${isKv?'':'style="display:none"'}>
+          <input type="text" class="input-field w-full px-3 py-1.5 text-sm font-mono" value="${(ep.account_id||'').replace(/"/g,'&quot;')}" placeholder="CF Account ID" onchange="updateEpField(${i},'account_id',this.value)">
+          <input type="text" class="input-field w-full px-3 py-1.5 text-sm font-mono" value="${(ep.namespace_id||'').replace(/"/g,'&quot;')}" placeholder="KV Namespace ID" onchange="updateEpField(${i},'namespace_id',this.value)">
+          <div class="relative">
+            <input type="password" class="input-field w-full px-3 py-1.5 text-sm font-mono pr-8" value="${(ep.api_token||'').replace(/"/g,'&quot;')}" placeholder="CF API Token (KV:Write)" onchange="updateEpField(${i},'api_token',this.value)">
+            <button type="button" onclick="togglePw(this)" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-sm leading-none cursor-pointer" style="color:var(--text-muted)" title="显示/隐藏密码">👁</button>
+          </div>
+        </div>
+        <input type="text" class="input-field w-full px-3 py-1.5 text-sm mt-2" value="${(ep.tag||'').replace(/"/g,'&quot;')}" placeholder="标签可选，如 CF优选" onchange="updateEpField(${i},'tag',this.value)">
+      </div>`;
+    }).join('');
+
+    document.getElementById(egId).innerHTML = `
+      <div class="flex items-center justify-between px-3 py-2 rounded-lg" style="background:var(--bg-page);border:1px solid var(--glass-border)">
+        <span class="text-sm font-medium">启用 Edgetunnel 同步</span>
+        <label class="toggle"><input type="checkbox" id="eg_enabled" ${cfg.EDGETUNNEL_ENABLED?'checked':''}>
+        <span class="toggle-track"></span></label>
+      </div>
+      <hr style="border-color:var(--glass-border);margin:8px 0">
+
+      <div class="text-sm font-medium mb-2" style="color:var(--text-muted)">端点列表（每个端点可选 HTTP 或 KV 模式）</div>
+      <div class="space-y-3" id="ep_list">${listHtml}</div>
+      <div class="flex gap-2 mt-2">
+        <button onclick="addEp('http')" class="px-3 py-1.5 text-xs rounded-lg" style="background:var(--accent);color:#fff">➕ 添加 HTTP 端点</button>
+        <button onclick="addEp('kv')" class="px-3 py-1.5 text-xs rounded-lg" style="background:#8b5cf6;color:#fff">☁️ 添加 KV 端点</button>
+      </div>
+      <div class="flex gap-2 mt-2">
+        <button onclick="saveEdgetunnel()" class="btn-primary px-4 py-1.5 text-sm rounded-lg">💾 保存</button>
+        <button onclick="syncNow()" class="px-4 py-1.5 text-sm rounded-lg" style="color:var(--accent);border:1px solid var(--accent);background:var(--accent-light)">🔄 同步最近一次测速</button>
+        <button onclick="collectSyncEdgetunnel()" class="px-4 py-1.5 text-sm rounded-lg" style="color:#8b5cf6;border:1px solid #8b5cf6;background:rgba(139,92,246,0.08)">📋 合并历史检测并同步</button>
+      </div>
+      <div id="eg_msg" class="text-xs mt-2" style="color:var(--text-muted)"></div>`;
+
+    // Also embed help text below
+    document.getElementById(egId).innerHTML += `
+      <details class="rounded-lg p-3 mt-3 cursor-pointer" style="background:var(--bg-page);border:1px solid var(--glass-border)">
+        <summary class="text-xs font-medium">📖 KV 端点需要的信息从哪里获取？</summary>
+        <div class="mt-2 text-xs space-y-2" style="color:var(--text-muted);line-height:1.6">
+          <div><b style="color:var(--text)">1. CF Account ID</b><br>
+            Cloudflare 仪表盘 → 右侧栏「账户 ID」，或访问
+            <a href="https://dash.cloudflare.com/" target="_blank" style="color:var(--accent)">dash.cloudflare.com</a> → URL 中可以看到
+          </div>
+          <div><b style="color:var(--text)">2. KV Namespace ID</b><br>
+            Cloudflare 仪表盘 → Workers 和 Pages → KV →
+            找到绑定到 edgetunnel Worker 的那个命名空间 → 详情 → 复制「命名空间 ID」
+          </div>
+          <div><b style="color:var(--text)">3. CF API Token</b><br>
+            Cloudflare 仪表盘 → 我的个人资料 → API 令牌 → 创建令牌 →
+            「Workers KV」模板 → 权限选「编辑」→ 创建 → 复制令牌
+          </div>
+        </div>
+      </details>`;
+  } catch(e) {
+    document.getElementById('edgetunnel-section').innerHTML = '<div class="text-red-500 text-sm">加载失败: '+e.message+'</div>';
+  }
+}
+
+function toggleEpMode(idx, mode) {
+  const items = document.getElementById('ep_list')?.children;
+  if (!items || !items[idx]) return;
+  const div = items[idx];
+  div.querySelector('.http-fields').style.display = mode === 'http' ? '' : 'none';
+  div.querySelector('.kv-fields').style.display = mode === 'kv' ? '' : 'none';
+  // Set default tag in first unused field
+  const sel = div.querySelector('select');
+  if (sel) sel.value = mode;
+}
+
+function updateEpField(idx, field, val) {
+  // stored in DOM, read by getEPs()
+}
+
+// ===== Edgetunnel multi-endpoint helpers =====
+function getEPs() {
+  const list = document.getElementById('ep_list');
+  if (!list) return [];
+  return Array.from(list.children).map(div => {
+    const sel = div.querySelector('select');
+    const mode = sel?.value || 'http';
+    const inputs = div.querySelectorAll('input');
+    const base = { enabled: div.querySelector('.toggle input')?.checked !== false, tag: '' };
+    // Find tag input (always last among inputs)
+    const allInputs = div.querySelectorAll('input[type="text"], input[type="url"], input[type="password"]');
+    const tagInput = allInputs[allInputs.length - 1];
+    if (tagInput) base.tag = tagInput.value;
+    if (mode === 'kv') {
+      const kvInputs = div.querySelectorAll('.kv-fields input');
+      return { ...base, type: 'kv', account_id: kvInputs[0]?.value || '', namespace_id: kvInputs[1]?.value || '', api_token: kvInputs[2]?.value || '' };
+    } else {
+      const httpInputs = div.querySelectorAll('.http-fields input');
+      return { ...base, type: 'http', url: httpInputs[0]?.value || '', password: httpInputs[1]?.value || '' };
+    }
+  });
+}
+function deleteEp(idx) {
+  const items = document.getElementById('ep_list')?.children;
+  if (items && items[idx]) items[idx].remove();
+}
+function addEp(mode) {
+  const list = document.getElementById('ep_list');
+  const div = document.createElement('div');
+  div.className = 'rounded-lg p-3';
+  div.style.cssText = 'background:var(--input-bg);border:1px solid var(--glass-border)';
+  const isKv = mode === 'kv';
+  div.innerHTML = `
+    <div class="flex items-center gap-2 mb-2">
+      <select onchange="toggleEpModeFromEvent(this)" class="text-xs px-2 py-1 rounded" style="background:var(--bg-page);border:1px solid var(--glass-border);color:var(--text)">
+        <option value="http" ${isKv?'':'selected'}>📡 HTTP</option>
+        <option value="kv" ${isKv?'selected':''}>☁️ KV</option>
+      </select>
+      <span class="text-xs" style="color:var(--text-muted)">新端点</span>
+      <div class="ml-auto flex items-center gap-2">
+        <label class="toggle"><input type="checkbox" checked><span class="toggle-track"></span></label>
+        <button onclick="this.closest('[class*=rounded]').remove()" class="text-xs px-2 py-1 rounded" style="color:var(--danger);border:1px solid var(--danger)">删除</button>
+      </div>
+    </div>
+    <div class="space-y-2 http-fields" ${isKv?'style="display:none"':''}>
+      <input type="url" class="input-field w-full px-3 py-1.5 text-sm" placeholder="https://你的域名.com">
+      <div class="relative">
+        <input type="password" class="input-field w-full px-3 py-1.5 text-sm font-mono pr-8" placeholder="管理密码">
+        <button type="button" onclick="togglePw(this)" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-sm leading-none cursor-pointer" style="color:var(--text-muted)">👁</button>
+      </div>
+    </div>
+    <div class="space-y-2 kv-fields" ${isKv?'':'style="display:none"'}>
+      <input type="text" class="input-field w-full px-3 py-1.5 text-sm font-mono" placeholder="CF Account ID">
+      <input type="text" class="input-field w-full px-3 py-1.5 text-sm font-mono" placeholder="KV Namespace ID">
+      <div class="relative">
+        <input type="password" class="input-field w-full px-3 py-1.5 text-sm font-mono pr-8" placeholder="CF API Token (KV:Write)">
+        <button type="button" onclick="togglePw(this)" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-sm leading-none cursor-pointer" style="color:var(--text-muted)">👁</button>
+      </div>
+    </div>
+    <input type="text" class="input-field w-full px-3 py-1.5 text-sm mt-2" placeholder="标签可选，如 CF优选">`;
+  list.appendChild(div);
+}
+function toggleEpModeFromEvent(sel) {
+  const div = sel.closest('[class*=rounded]');
+  if (!div) return;
+  const mode = sel.value;
+  div.querySelector('.http-fields').style.display = mode === 'http' ? '' : 'none';
+  div.querySelector('.kv-fields').style.display = mode === 'kv' ? '' : 'none';
+}
+
+async function saveEdgetunnel() {
+  const data = {
+    EDGETUNNEL_ENABLED: document.getElementById('eg_enabled')?.checked || false,
+    EDGETUNNEL_ENDPOINTS: getEPs(),
+  };
+  try {
+    const r = await fetch('/api/edgetunnel/config', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    const d = await r.json();
+    document.getElementById('eg_msg').textContent = d.ok ? '✅ 已保存' : '❌ '+(d.error||'失败');
+  } catch(e) { document.getElementById('eg_msg').textContent = '❌ 网络错误'; }
+}
+
+async function syncNow() {
+  const data = {
+    EDGETUNNEL_ENABLED: document.getElementById('eg_enabled')?.checked || false,
+    EDGETUNNEL_ENDPOINTS: getEPs(),
+  };
+  document.getElementById('eg_msg').textContent = '⏳ 保存并同步中...';
+  try {
+    await fetch('/api/edgetunnel/config', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    const r = await fetch('/api/edgetunnel/sync', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    const d = await r.json();
+    if (d.ok) {
+      const details = (d.details||[]).join('\n');
+      document.getElementById('eg_msg').innerHTML = '✅ '+d.message + (details?'<br><span style="font-size:10px">'+details.replace(/\n/g,'<br>')+'</span>':'');
+    } else {
+      document.getElementById('eg_msg').textContent = '❌ '+(d.error||'同步失败');
+    }
+  } catch(e) { document.getElementById('eg_msg').textContent = '❌ 网络错误'; }
+}
+
+// ===== GitHub 最近一次测速同步 =====
+async function syncGithubNow() {
+  if (!confirm('将把最近一次测速结果推送到 GitHub，确认？')) return;
+  const btn = document.querySelector('button[onclick*="syncGithubNow"]');
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳ 同步中...';
+  document.getElementById('gh_msg').textContent = '⏳ 同步中...';
+  try {
+    const r = await fetch('/api/github/sync-latest', {method:'POST',headers:{'Content-Type':'application/json'}});
+    const d = await r.json();
+    document.getElementById('gh_msg').innerHTML = d.ok ? '✅ '+(d.details||[]).join('<br>') : '❌ '+(d.error||'失败');
+  } catch(e) {
+    document.getElementById('gh_msg').textContent = '❌ 网络错误: '+e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
+
+// ===== 合并历史检测并同步 =====
+async function collectSyncEdgetunnel() {
+  if (!confirm('将从所有历史记录中提取 IP，重新检测 TCP 连通性，将活着的同步到 Edgetunnel，确认？')) return;
+  const btn = document.querySelector('button[onclick*="collectSyncEdgetunnel"]');
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳ 检测中...';
+  document.getElementById('eg_msg').textContent = '⏳ 正在扫描历史记录并检测 TCP...';
+  try {
+    const r = await fetch('/api/edgetunnel/collect-sync', {method:'POST',headers:{'Content-Type':'application/json'}});
+    const d = await r.json();
+    if (d.ok) {
+      let html = `✅ 活着的IP: ${d.live_count} 个`;
+      if (d.details) html += '<br>' + d.details.join('<br>');
+      document.getElementById('eg_msg').innerHTML = html;
+    } else {
+      document.getElementById('eg_msg').textContent = '❌ ' + (d.error||'同步失败');
+    }
+  } catch(e) {
+    document.getElementById('eg_msg').textContent = '❌ 网络错误: '+e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
+
+async function collectSyncGithub() {
+  if (!confirm('将从所有历史记录中提取 IP，重新检测 TCP 连通性，将活着的推送到 GitHub，确认？')) return;
+  const btn = document.querySelector('button[onclick*="collectSyncGithub"]');
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = '⏳ 检测中...';
+  document.getElementById('gh_msg').textContent = '⏳ 正在扫描历史记录并检测 TCP...';
+  try {
+    const r = await fetch('/api/github/collect-sync', {method:'POST',headers:{'Content-Type':'application/json'}});
+    const d = await r.json();
+    if (d.ok) {
+      let html = `✅ 活着的IP: ${d.live_count} 个`;
+      if (d.details) html += '<br>' + d.details.join('<br>');
+      document.getElementById('gh_msg').innerHTML = html;
+    } else {
+      document.getElementById('gh_msg').textContent = '❌ ' + (d.error||'同步失败');
+    }
+  } catch(e) {
+    document.getElementById('gh_msg').textContent = '❌ 网络错误: '+e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
+
+// ===== Password visibility toggle =====
+function togglePW(btn) {
+  const inp = btn.previousElementSibling;
+  if (!inp) return;
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    btn.textContent = '🙈';
+  } else {
+    inp.type = 'password';
+    btn.textContent = '👁';
+  }
+}
+
+loadConfig().then(() => {
+  loadEdgetunnel();
+  loadSchedule();
+  loadGitHub();
+});
+</script>
+{% endblock %}

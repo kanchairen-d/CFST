@@ -1,0 +1,180 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <h2 class="text-2xl font-bold mb-6">仪表盘</h2>
+
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div class="rounded-xl p-5 border border-color shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg relative overflow-hidden" style="background:var(--glass-bg);border-color:var(--glass-border)">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-secondary">总测速次数</p>
+                    <p id="statTotalRuns" class="text-3xl font-bold mt-1">-</p>
+                </div>
+                <div class="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+                </div>
+            </div>
+        </div>
+        <div class="rounded-xl p-5 border border-color shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg relative overflow-hidden" style="background:var(--glass-bg);border-color:var(--glass-border)">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-secondary">总 IP 通过数</p>
+                    <p id="statTotalPassed" class="text-3xl font-bold mt-1">-</p>
+                </div>
+                <div class="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600 dark:text-green-400">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                </div>
+            </div>
+        </div>
+        <div class="rounded-xl p-5 border border-color shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg relative overflow-hidden" style="background:var(--glass-bg);border-color:var(--glass-border)">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-secondary">最快带宽</p>
+                    <p id="statMaxBandwidth" class="text-3xl font-bold mt-1">-</p>
+                </div>
+                <div class="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-purple-600 dark:text-purple-400">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                </div>
+            </div>
+        </div>
+        <div class="rounded-xl p-5 border border-color shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg relative overflow-hidden" style="background:var(--glass-bg);border-color:var(--glass-border)">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-secondary">最低延迟</p>
+                    <p id="statMinLatency" class="text-3xl font-bold mt-1">-</p>
+                </div>
+                <div class="w-12 h-12 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 dark:text-orange-400">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- System Status & Latest Run (merged) -->
+    <div class="rounded-xl p-5 border shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg mb-8" style="background:var(--glass-bg);border-color:var(--glass-border)">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Left: System Status -->
+            <div>
+                <h3 class="text-lg font-semibold mb-4">系统状态</h3>
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm" style="color:var(--text-muted)">服务状态</span>
+                        <span id="sysStatus" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                            <span class="w-2 h-2 rounded-full bg-green-500 inline-block"></span>运行中
+                        </span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm" style="color:var(--text-muted)">测速任务</span>
+                        <span id="taskStatus" class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300">
+                            <span class="w-2 h-2 rounded-full bg-gray-400 inline-block"></span>空闲
+                        </span>
+                    </div>
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm" style="color:var(--text-muted)">配置文件</span>
+                        <span class="text-sm font-mono" style="color:var(--text)">config.json</span>
+                    </div>
+                </div>
+            </div>
+            <!-- Right: Latest Run -->
+            <div>
+                <h3 class="text-lg font-semibold mb-4">最近一次运行</h3>
+                <div id="latestRunContent">
+                    <div class="text-center py-8 text-secondary">暂无运行记录</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Table from Latest Run -->
+    <div class="rounded-xl p-5 border shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg" style="background:var(--glass-bg);border-color:var(--glass-border)">
+        <h3 class="text-lg font-semibold mb-4">最新优选节点</h3>
+        <div id="latestResults" class="overflow-x-auto">
+            <div class="text-center py-8 text-secondary">暂无数据，请先<a href="/speedtest" class="text-blue-500 hover:underline">运行测速</a></div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function loadStats() {
+    try {
+        const res = await fetch('/api/stats');
+        const data = await res.json();
+        document.getElementById('statTotalRuns').textContent = data.total_runs;
+        document.getElementById('statTotalPassed').textContent = data.total_passed;
+        document.getElementById('statMaxBandwidth').textContent = data.max_bandwidth > 0 ? data.max_bandwidth + ' Mbps' : '-';
+        document.getElementById('statMinLatency').textContent = data.min_latency > 0 && data.min_latency < 999 ? data.min_latency + ' ms' : '-';
+
+        // Task status
+        const taskEl = document.getElementById('taskStatus');
+        if (data.running) {
+            taskEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-yellow-500 inline-block"></span>运行中';
+            taskEl.className = 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400';
+        } else {
+            taskEl.innerHTML = '<span class="w-2 h-2 rounded-full bg-gray-400 inline-block"></span>空闲';
+            taskEl.className = 'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+        }
+
+        // Latest run
+        const lr = data.latest_run;
+        const lrEl = document.getElementById('latestRunContent');
+        if (lr) {
+            const statusMap = { 'completed': '✅ 完成', 'failed': '❌ 失败', 'stopped': '⏹ 已停止', 'running': '⏳ 运行中' };
+            const dt = lr.started_at ? new Date(lr.started_at).toLocaleString() : '-';
+            const bw = lr.best_bandwidth > 0 ? lr.best_bandwidth + ' Mbps' : '-';
+            const lat = lr.best_latency > 0 && lr.best_latency < 999 ? lr.best_latency + ' ms' : '-';
+            const passRate = lr.total_nodes > 0 ? ((lr.passed_nodes / lr.total_nodes) * 100).toFixed(0) : 0;
+            lrEl.innerHTML = `
+                <div class="space-y-2 text-sm">
+                    <div class="flex justify-between"><span style="color:var(--text-muted)">状态</span><span>${statusMap[lr.status] || lr.status}</span></div>
+                    <div class="flex justify-between"><span style="color:var(--text-muted)">通过率</span><span>${passRate}%</span></div>
+                    <div class="flex justify-between"><span style="color:var(--text-muted)">最优带宽</span><span style="color:#22c55e">${bw}</span></div>
+                    <div class="flex justify-between"><span style="color:var(--text-muted)">最低延迟</span><span style="color:#f97316">${lat}</span></div>
+                </div>
+                <div class="text-xs text-center" style="color:var(--text-muted)">
+                    ${dt} · 通过 ${lr.passed_nodes}/${lr.total_nodes} 个节点 · 模式: ${lr.mode || '-'}
+                    · <a href="/run/${lr.id}" style="color:var(--accent);text-decoration:underline">查看详情 →</a>
+                </div>`;
+
+            // Latest results nodes
+            if (lr.results_json) {
+                try {
+                    const rj = JSON.parse(lr.results_json);
+                    const nodes = rj.nodes || [];
+                    const resultsEl = document.getElementById('latestResults');
+                    if (nodes.length > 0) {
+                        // Find max bandwidth for bar scaling
+                        const maxBw = Math.max(...nodes.map(n => n.bandwidth));
+                        let html = '<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">';
+                        nodes.forEach((n, i) => {
+                            const pct = maxBw > 0 ? (n.bandwidth / maxBw * 100) : 0;
+                            const barColor = pct > 70 ? '#22c55e' : pct > 40 ? '#eab308' : '#f97316';
+                            const label = n.node.includes('#') ? n.node.split('#')[1] : '';
+                            const ipPart = n.node.split('#')[0];
+                            html += '<div class="rounded-lg p-3 border" style="background:var(--bg-page);border-color:var(--glass-border)">' +
+                                '<div class="flex items-center justify-between mb-1.5">' +
+                                '<span class="font-mono text-xs font-medium truncate" title="' + n.node + '">' + (label ? '<span class="px-1.5 py-0.5 rounded text-xs font-bold mr-1" style="background:var(--accent);color:#fff">' + label + '</span>' : '') + ipPart + '</span>' +
+                                '<span class="font-mono text-xs font-bold" style="color:' + barColor + '">' + n.bandwidth.toFixed(1) + ' Mb</span></div>' +
+                                '<div class="flex items-center gap-2">' +
+                                '<div class="flex-1 h-2 rounded-full" style="background:var(--glass-border)">' +
+                                '<div class="h-2 rounded-full transition-all" style="width:' + pct + '%;background:' + barColor + '"></div></div>' +
+                                '<span class="text-xs" style="color:var(--text-muted)">' + (n.latency ? n.latency.toFixed(0) + 'ms' : '-') + '</span></div></div>';
+                        });
+                        html += '</div>';
+                        resultsEl.innerHTML = html;
+                    } else {
+                        resultsEl.innerHTML = '<div class="text-center py-4 text-secondary">暂无节点数据</div>';
+                    }
+                } catch(e) {}
+            }
+        }
+    } catch(e) {
+        console.error('Stats load error:', e);
+    }
+}
+
+loadStats();
+// Auto refresh stats every 30s
+setInterval(loadStats, 30000);
+</script>
+{% endblock %}

@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-2xl font-bold">历史记录</h2>
+        <div class="flex gap-2">
+            <button onclick="exportSelected('csv')" class="px-3 py-2 text-sm text-white rounded-lg transition flex items-center gap-1" style="background:#22c55e">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                CSV
+            </button>
+            <button onclick="exportSelected('json')" class="px-3 py-2 text-sm text-white rounded-lg transition flex items-center gap-1" style="background:#3b82f6">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                JSON
+            </button>
+            <button onclick="deleteSelected()" id="btnDelSelected" class="px-3 py-2 text-sm rounded-lg transition" style="background:#fee2e2;color:#dc2626;border:1px solid #fecaca">🗑️ 删除 (<span id="selCount">0</span>)</button>
+            <button onclick="clearAll()" class="px-3 py-2 text-sm bg-red-600 hover:bg-red-700 text-white rounded-lg transition">🗑️ 清空</button>
+        </div>
+    </div>
+
+    <div id="historyCards" class="space-y-3"></div>
+
+    <div id="pagination" class="flex items-center justify-center gap-3 mt-6"></div>
+</div>
+
+<script>
+let currentPage = 1;
+
+function loadHistory(page) {
+    currentPage = page || 1;
+    fetch('/api/runs?page=' + currentPage)
+        .then(r => r.json())
+        .then(data => {
+            const container = document.getElementById('historyCards');
+            const statusMap = { 'completed': '✅ 完成', 'failed': '❌ 失败', 'stopped': '⏹ 已停止', 'running': '⏳ 运行中' };
+
+            if (data.runs.length === 0) {
+                container.innerHTML = '<div class="text-center py-12 text-secondary">暂无运行记录</div>';
+                return;
+            }
+
+            container.innerHTML = data.runs.map(r => {
+                const isCompleted = r.status === 'completed';
+                const hasResults = isCompleted && r.passed_nodes > 0;
+                const passRate = r.total_nodes > 0 ? ((r.passed_nodes / r.total_nodes) * 100).toFixed(0) : 0;
+
+                // Status bar color
+                let statusBg, statusText;
+                if (r.status === 'completed') { statusBg = '#22c55e'; statusText = '#166534'; }
+                else if (r.status === 'failed') { statusBg = '#ef4444'; statusText = '#fff'; }
+                else if (r.status === 'stopped') { statusBg = '#eab308'; statusText = '#854d0e'; }
+                else { statusBg = '#3b82f6'; statusText = '#fff'; }
+
+                const bwVal = r.best_bandwidth > 0 ? r.best_bandwidth.toFixed(1) : null;
+                const latVal = r.best_latency > 0 && r.best_latency < 999 ? r.best_latency.toFixed(1) : null;
+
+                // Bandwidth bar color
+                const bwColor = bwVal && parseFloat(bwVal) > 30 ? '#22c55e' : bwVal && parseFloat(bwVal) > 10 ? '#eab308' : '#f97316';
+
+                return `
+                <div class="rounded-xl p-4 border shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg" style="background:var(--glass-bg);border-color:var(--glass-border)">
+                    <div class="flex items-center gap-4">
+                        <!-- Left: checkbox + id -->
+                        <div class="flex items-center gap-3 pt-0.5">
+                            <input type="checkbox" class="row-check" value="${r.id}" ${hasResults ? '' : 'disabled title="无结果"'} style="accent-color:#3b82f6">
+                            <span class="text-sm font-mono font-semibold" style="color:var(--text-muted)">#${r.display_num}</span>
+                        </div>
+
+                        <!-- Middle: main info -->
+                        <div class="flex-1 min-w-0">
+                            <div class="flex items-center gap-3 mb-2 flex-wrap">
+                                <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium" style="background:${statusBg}20;color:${statusText}">${statusMap[r.status] || r.status}</span>
+                                <span class="text-xs" style="color:var(--text-muted)">${r.started_at ? new Date(r.started_at).toLocaleString() : '-'}</span>
+                                <span class="text-xs" style="color:var(--text-muted)">模式: ${r.mode || '-'}</span>
+                            </div>
+                            <div class="flex items-center gap-5 text-sm flex-wrap">
+                                <span title="总节点"><span style="color:var(--text-muted)">📦</span> ${(r.total_nodes || 0).toLocaleString()}</span>
+                                <span title="通过" style="color:#22c55e">✅ ${r.passed_nodes || 0} (${passRate}%)</span>
+                                <span title="带宽" style="color:${bwColor}">⚡ ${bwVal ? bwVal + ' Mbps' : '-'}</span>
+                                <span title="延迟" style="color:#f97316">📡 ${latVal ? latVal + ' ms' : '-'}</span>
+                            </div>
+                        </div>
+
+                        <!-- Right: actions -->
+                        <div class="flex items-center gap-2">
+                            <a href="/run/${r.id}" class="px-3 py-1.5 text-xs text-white rounded-lg transition" style="background:#3b82f6">查看</a>
+                            <button onclick="deleteRun(${r.id})" class="px-3 py-1.5 text-xs rounded-lg transition" style="background:#fee2e2;color:#dc2626">删除</button>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+
+            // Bind checkbox change events to update count
+            document.querySelectorAll('.row-check').forEach(cb => cb.addEventListener('change', updateSelCount));
+            updateSelCount();
+
+            // Pagination
+            const pg = document.getElementById('pagination');
+            if (data.pages > 1) {
+                let html = '';
+                for (let i = 1; i <= data.pages; i++) {
+                    const active = i === currentPage;
+                    html += `<button onclick="loadHistory(${i})" class="px-3 py-1.5 rounded-lg text-sm transition font-medium ${active ? 'text-white' : ''}" style="${active ? 'background:#3b82f6;color:#fff' : 'background:var(--glass-border);color:var(--text)'}">${i}</button>`;
+                }
+                pg.innerHTML = html;
+            } else {
+                pg.innerHTML = '';
+            }
+        });
+}
+
+function deleteRun(id) {
+    if (!confirm('确定要删除运行 #' + id + ' 的记录？')) return;
+    fetch('/api/runs/' + id, { method: 'DELETE' })
+        .then(r => r.json())
+        .then(() => loadHistory(currentPage));
+}
+
+function updateSelCount() {
+    const count = getSelectedIds().length;
+    document.getElementById('selCount').textContent = count;
+    const btn = document.getElementById('btnDelSelected');
+    if (count > 0) {
+        btn.style.opacity = '1';
+        btn.style.pointerEvents = 'auto';
+    } else {
+        btn.style.opacity = '0.4';
+        btn.style.pointerEvents = 'none';
+    }
+}
+
+function deleteSelected() {
+    const ids = getSelectedIds();
+    if (ids.length === 0) return;
+    if (!confirm('确定要删除选中的 ' + ids.length + ' 条记录？')) return;
+    let done = 0;
+    ids.forEach(id => {
+        fetch('/api/runs/' + id, { method: 'DELETE' })
+            .then(r => r.json())
+            .then(() => {
+                done++;
+                if (done === ids.length) loadHistory(currentPage);
+            });
+    });
+}
+
+function clearAll() {
+    if (!confirm('确定要清空所有历史记录？此操作不可恢复！')) return;
+    fetch('/api/runs/clear', { method: 'POST' })
+        .then(r => r.json())
+        .then(() => loadHistory(1));
+}
+
+function getSelectedIds() {
+    return Array.from(document.querySelectorAll('.row-check:checked')).map(c => parseInt(c.value));
+}
+
+function exportSelected(format) {
+    const ids = getSelectedIds();
+    if (ids.length === 0) {
+        alert('请先勾选要导出的测速记录');
+        return;
+    }
+    window.location.href = '/api/runs/export?format=' + format + '&ids=' + ids.join(',');
+}
+
+loadHistory(1);
+</script>
+{% endblock %}

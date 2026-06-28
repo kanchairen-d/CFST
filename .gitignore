@@ -1,0 +1,33 @@
+# Sensitive user data
+data/
+config.json
+edgetunnel_config.json
+config.json.bak
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Runtime files
+*.log
+ip.txt
+results.db
+*.db
+schedule.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Git scripts (not needed in repo)
+git_sync.ps1
+git_sync.sh
+setup.ps1
+setup.sh
+update_fork.ps1
+update_fork.sh
