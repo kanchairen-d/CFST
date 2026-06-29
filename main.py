@@ -706,7 +706,7 @@ def fetch_additional_source(url):
     for attempt in range(1, FETCH_MAX_RETRIES + 1):
         try:
             print(f"正在请求数据源 {url} (尝试 {attempt}/{FETCH_MAX_RETRIES}) ...")
-            headers = {"Accept-Encoding": "gzip, deflate, br, zstd"}
+            headers = {"Accept-Encoding": "gzip, deflate"}
             resp = requests.get(url, timeout=(FETCH_CONNECT_TIMEOUT, FETCH_TIMEOUT), headers=headers)
             resp.raise_for_status()
             nodes = parse_adaptive(resp.text)
