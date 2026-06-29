@@ -658,7 +658,7 @@ async function loadEdgetunnel() {
           <input type="url" class="input-field w-full px-3 py-1.5 text-sm" value="${(ep.url||'').replace(/"/g,'&quot;')}" placeholder="https://你的域名.com" onchange="updateEpField(${i},'url',this.value)">
           <div class="relative">
             <input type="password" class="input-field w-full px-3 py-1.5 text-sm font-mono pr-8" value="${(ep.password||'').replace(/"/g,'&quot;')}" placeholder="管理密码" onchange="updateEpField(${i},'password',this.value)">
-            <button type="button" onclick="togglePw(this)" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-sm leading-none cursor-pointer" style="color:var(--text-muted)" title="显示/隐藏密码">👁</button>
+            <button type="button" onclick="togglePW(this)" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-sm leading-none cursor-pointer" style="color:var(--text-muted)" title="显示/隐藏密码">👁</button>
           </div>
         </div>
         <div class="space-y-2 kv-fields" ${isKv?'':'style="display:none"'}>
@@ -666,7 +666,7 @@ async function loadEdgetunnel() {
           <input type="text" class="input-field w-full px-3 py-1.5 text-sm font-mono" value="${(ep.namespace_id||'').replace(/"/g,'&quot;')}" placeholder="KV Namespace ID" onchange="updateEpField(${i},'namespace_id',this.value)">
           <div class="relative">
             <input type="password" class="input-field w-full px-3 py-1.5 text-sm font-mono pr-8" value="${(ep.api_token||'').replace(/"/g,'&quot;')}" placeholder="CF API Token (KV:Write)" onchange="updateEpField(${i},'api_token',this.value)">
-            <button type="button" onclick="togglePw(this)" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-sm leading-none cursor-pointer" style="color:var(--text-muted)" title="显示/隐藏密码">👁</button>
+            <button type="button" onclick="togglePW(this)" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-sm leading-none cursor-pointer" style="color:var(--text-muted)" title="显示/隐藏密码">👁</button>
           </div>
         </div>
         <input type="text" class="input-field w-full px-3 py-1.5 text-sm mt-2" value="${(ep.tag||'').replace(/"/g,'&quot;')}" placeholder="标签可选，如 CF优选" onchange="updateEpField(${i},'tag',this.value)">
@@ -781,7 +781,7 @@ function addEp(mode) {
       <input type="url" class="input-field w-full px-3 py-1.5 text-sm" placeholder="https://你的域名.com">
       <div class="relative">
         <input type="password" class="input-field w-full px-3 py-1.5 text-sm font-mono pr-8" placeholder="管理密码">
-        <button type="button" onclick="togglePw(this)" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-sm leading-none cursor-pointer" style="color:var(--text-muted)">👁</button>
+        <button type="button" onclick="togglePW(this)" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-sm leading-none cursor-pointer" style="color:var(--text-muted)">👁</button>
       </div>
     </div>
     <div class="space-y-2 kv-fields" ${isKv?'':'style="display:none"'}>
@@ -789,7 +789,7 @@ function addEp(mode) {
       <input type="text" class="input-field w-full px-3 py-1.5 text-sm font-mono" placeholder="KV Namespace ID">
       <div class="relative">
         <input type="password" class="input-field w-full px-3 py-1.5 text-sm font-mono pr-8" placeholder="CF API Token (KV:Write)">
-        <button type="button" onclick="togglePw(this)" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-sm leading-none cursor-pointer" style="color:var(--text-muted)">👁</button>
+        <button type="button" onclick="togglePW(this)" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-sm leading-none cursor-pointer" style="color:var(--text-muted)">👁</button>
       </div>
     </div>
     <input type="text" class="input-field w-full px-3 py-1.5 text-sm mt-2" placeholder="标签可选，如 CF优选">`;
