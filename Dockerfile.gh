@@ -1,0 +1,3 @@
+FROM ghcr.io/kanchairen-d/cfst:latest
+LABEL org.opencontainers.image.source=https://github.com/kanchairen-d/CFST
+LABEL org.opencontainers.image.description="Cloudflare IP Speed Test Dashboard"
