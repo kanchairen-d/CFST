@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="max-w-6xl mx-auto">
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-2xl font-bold">运行详情 #{{ run_id }}</h2>
+        <a href="/history" class="px-4 py-2 text-sm rounded-lg transition flex items-center gap-1" style="background:var(--glass-border);color:var(--text)">← 返回历史</a>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Left: Run Info + Timeline -->
+        <div class="space-y-6">
+            <!-- Run Info -->
+            <div class="rounded-xl p-5 border shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg" style="background:var(--glass-bg);border-color:var(--glass-border)">
+                <h3 class="font-semibold mb-4">基本信息</h3>
+                <div id="runInfo" class="text-sm">
+                    <div class="text-center py-6 text-secondary">加载中...</div>
+                </div>
+            </div>
+            <!-- Timeline -->
+            <div class="rounded-xl p-5 border shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg" style="background:var(--glass-bg);border-color:var(--glass-border)">
+                <h3 class="font-semibold mb-4">测速流程</h3>
+                <div id="timelineContent">
+                    <div class="text-center py-6 text-secondary">加载中...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right: Results -->
+        <div class="lg:col-span-2 rounded-xl border shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg" style="background:var(--glass-bg);border-color:var(--glass-border)">
+            <div class="px-5 py-3" style="border-bottom:1px solid var(--glass-border)">
+                <h3 class="font-semibold">优选节点</h3>
+            </div>
+            <div id="resultTable" class="p-5">
+                <div class="text-center py-8 text-secondary">加载中...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Full Log -->
+    <div class="mt-6 rounded-xl border shadow-sm transition-all duration-200 hover:-translate-y-1 hover:shadow-lg" style="background:var(--glass-bg);border-color:var(--glass-border)">
+        <div class="px-5 py-3" style="border-bottom:1px solid var(--glass-border)">
+            <h3 class="font-semibold">完整日志</h3>
+        </div>
+        <div id="logViewer" class="p-4 font-mono text-xs rounded-b-xl overflow-y-auto whitespace-pre-wrap" style="max-height: 400px; background: var(--log-bg); color: var(--text);">
+            加载中...
+        </div>
+    </div>
+</div>
+
+<script>
+function detectPhases(log) {
+    const phases = [
+        { id: 'source', label: '📥 数据源', pattern: '正在请求数据源', logLines: [] },
+        { id: 'prefilter', label: '🔍 前置过滤', pattern: '前置过滤|IP 地区校准', logLines: [] },
+        { id: 'tcp', label: '📡 TCP 连接测试', pattern: '开始 TCP 连接测试', logLines: [] },
+        { id: 'availability', label: '✅ IP 可用性检测', pattern: '可用性检测|可用性', logLines: [] },
+        { id: 'http', label: '🌐 HTTP 检测', pattern: 'HTTP检测|HTTP 检测', logLines: [] },
+        { id: 'speed', label: '🚀 带宽测速', pattern: '带宽测速|开始带宽', logLines: [] },
+        { id: 'output', label: '📋 输出/同步', pattern: 'TXT 记录更新|同步到 GitHub|写入文件', logLines: [] },
+    ];
+    if (!log) return phases;
+    const lines = log.split('\n');
+    let currentPhase = null;
+    for (const line of lines) {
+        for (const phase of phases) {
+            if (line.match(phase.pattern)) {
+                currentPhase = phase;
+                phase.logLines.push(line);
+                break;
+            }
+        }
+        if (currentPhase && !line.match(
+            phases.map(p => p.pattern).join('|')
+        )) {
+            currentPhase.logLines.push(line);
+        }
+    }
+    return phases;
+}
+
+function renderTimeline(log) {
+    const phases = detectPhases(log);
+    let html = '<div class="relative pl-6">';
+    // Vertical line
+    html += '<div class="absolute left-2.5 top-2 bottom-2 w-0.5" style="background:var(--glass-border)"></div>';
+    phases.forEach((p, i) => {
+        const done = p.logLines.length > 0;
+        const dotColor = done ? '#22c55e' : 'var(--glass-border)';
+        const dotBg = done ? '#bbf7d0' : 'transparent';
+        html += `<div class="relative pb-4 last:pb-0">
+            <div class="absolute left-[-14px] top-1 w-4 h-4 rounded-full flex items-center justify-center" style="background:${dotBg};border:2px solid ${dotColor}">
+                <div class="w-1.5 h-1.5 rounded-full" style="background:${dotColor}"></div>
+            </div>
+            <div class="text-sm" style="color:${done ? 'var(--text)' : 'var(--text-muted)'}">${done ? p.label : p.label.replace(/^./, '○')}</div>
+        </div>`;
+    });
+    html += '</div>';
+    return html;
+}
+
+async function loadRunDetail() {
+    const runId = {{ run_id }};
+    try {
+        const res = await fetch('/api/runs/' + runId);
+        const run = await res.json();
+        if (run.error) {
+            document.querySelector('#runInfo').innerHTML = `<div class="text-red-500">${run.error}</div>`;
+            return;
+        }
+
+        const statusMap = { 'completed': '✅ 完成', 'failed': '❌ 失败', 'stopped': '⏹ 已停止', 'running': '⏳ 运行中' };
+        const passRate = run.total_nodes > 0 ? ((run.passed_nodes / run.total_nodes) * 100).toFixed(0) : 0;
+        const bw = run.best_bandwidth > 0 ? run.best_bandwidth.toFixed(2) + ' Mbps' : '-';
+        const lat = run.best_latency > 0 && run.best_latency < 999 ? run.best_latency.toFixed(2) + ' ms' : '-';
+
+        // Run info with stats summary
+        document.getElementById('runInfo').innerHTML = `
+            <div class="text-center mb-4">
+                <span class="inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium ${
+                    run.status === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' :
+                    run.status === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                    run.status === 'stopped' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                    'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                }">${statusMap[run.status] || run.status}</span>
+            </div>
+            <div class="grid grid-cols-2 gap-2 mb-4">
+                <div class="rounded-lg p-3 text-center" style="background:var(--bg-page);border:1px solid var(--glass-border)">
+                    <div class="text-xs" style="color:var(--text-muted)">节点</div>
+                    <div class="text-lg font-bold mt-0.5">${run.total_nodes || 0}</div>
+                </div>
+                <div class="rounded-lg p-3 text-center" style="background:var(--bg-page);border:1px solid var(--glass-border)">
+                    <div class="text-xs" style="color:var(--text-muted)">通过</div>
+                    <div class="text-lg font-bold mt-0.5" style="color:#22c55e">${run.passed_nodes || 0}</div>
+                </div>
+                <div class="rounded-lg p-3 text-center" style="background:var(--bg-page);border:1px solid var(--glass-border)">
+                    <div class="text-xs" style="color:var(--text-muted)">带宽</div>
+                    <div class="text-lg font-bold mt-0.5" style="color:#22c55e">${run.best_bandwidth > 0 ? run.best_bandwidth.toFixed(1) + 'M' : '-'}</div>
+                </div>
+                <div class="rounded-lg p-3 text-center" style="background:var(--bg-page);border:1px solid var(--glass-border)">
+                    <div class="text-xs" style="color:var(--text-muted)">延迟</div>
+                    <div class="text-lg font-bold mt-0.5" style="color:#f97316">${run.best_latency > 0 && run.best_latency < 999 ? run.best_latency.toFixed(1) + 'ms' : '-'}</div>
+                </div>
+            </div>
+            <div class="space-y-2 text-xs" style="color:var(--text-muted)">
+                <div class="flex justify-between"><span>编号</span><span style="color:var(--text)">${run.display_num}</span></div>
+                <div class="flex justify-between"><span>开始</span><span style="color:var(--text)">${run.started_at ? new Date(run.started_at).toLocaleString() : '-'}</span></div>
+                <div class="flex justify-between"><span>结束</span><span style="color:var(--text)">${run.completed_at ? new Date(run.completed_at).toLocaleString() : '-'}</span></div>
+                <div class="flex justify-between"><span>模式</span><span style="color:var(--text)">${run.mode || '-'}</span></div>
+                <div class="flex justify-between"><span>通过率</span><span style="color:var(--text)">${passRate}%</span></div>
+            </div>`;
+        
+        // Timeline
+        document.getElementById('timelineContent').innerHTML = renderTimeline(run.log || '');
+
+        // Results table → cards with bandwidth bar
+        const rt = document.getElementById('resultTable');
+        if (run.results_json) {
+            try {
+                const rj = JSON.parse(run.results_json);
+                const nodes = rj.nodes || [];
+                if (nodes.length > 0) {
+                    // Deduplicate by IP:port
+                    const seen = new Set();
+                    const uniq = nodes.filter(n => {
+                        const key = n.node.split('#')[0];
+                        if (seen.has(key)) return false;
+                        seen.add(key);
+                        return true;
+                    });
+                    // Find max bandwidth for scaling
+                    const maxBw = Math.max(...uniq.map(n => n.bandwidth), 1);
+                    let html = '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">';
+                    uniq.forEach((n, i) => {
+                        const bwVal = n.bandwidth.toFixed(2);
+                        const latVal = n.latency && n.latency < 999 ? n.latency.toFixed(1) + ' ms' : '-';
+                        const jitVal = n.jitter ? n.jitter.toFixed(1) + ' ms' : '-';
+                        const bwPct = (n.bandwidth / maxBw * 100).toFixed(0);
+                        // Color: green → yellow → orange gradient based on bandwidth
+                        const barColor = n.bandwidth > maxBw * 0.7 ? '#22c55e' : n.bandwidth > maxBw * 0.3 ? '#eab308' : '#f97316';
+                        const region = n.node.includes('#') ? '<span class="text-xs px-1.5 py-0.5 rounded" style="background:var(--glass-border);color:var(--text-muted)">' + n.node.split('#')[1] + '</span>' : '';
+                        html += `<div class="rounded-lg p-4" style="background:var(--bg-page);border:1px solid var(--glass-border)">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-xs font-mono truncate max-w-[140px]" title="${n.node}">${n.node.split('#')[0]}</span>
+                                ${region}
+                            </div>
+                            <div class="mt-1.5 mb-2">
+                                <div class="flex justify-between text-xs mb-0.5">
+                                    <span style="color:var(--text-muted)">带宽</span>
+                                    <span style="color:${barColor};font-weight:600">${bwVal} Mbps</span>
+                                </div>
+                                <div class="w-full h-2 rounded-full overflow-hidden" style="background:var(--glass-border)">
+                                    <div class="h-full rounded-full transition-all" style="width:${bwPct}%;background:${barColor}"></div>
+                                </div>
+                            </div>
+                            <div class="flex gap-3 text-xs" style="color:var(--text-muted)">
+                                <span>延迟: <span style="color:var(--text)">${latVal}</span></span>
+                                <span>抖动: <span style="color:var(--text)">${jitVal}</span></span>
+                            </div>
+                        </div>`;
+                    });
+                    html += '</div>';
+                    rt.innerHTML = html;
+                } else {
+                    rt.innerHTML = '<div class="text-center py-4 text-secondary">无节点数据</div>';
+                }
+            } catch(e) {
+                rt.innerHTML = '<div class="text-center py-4 text-secondary">解析结果数据失败</div>';
+            }
+        } else {
+            rt.innerHTML = '<div class="text-center py-4 text-secondary">无结果数据</div>';
+        }
+
+        // Log
+        document.getElementById('logViewer').textContent = run.log || '(无日志)';
+
+    } catch(e) {
+        document.querySelector('#runInfo').innerHTML = '<div class="text-red-500">加载失败: ' + e.message + '</div>';
+    }
+}
+
+loadRunDetail();
+</script>
+{% endblock %}

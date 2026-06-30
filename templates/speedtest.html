@@ -1,0 +1,330 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+@keyframes pulse-border {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(59,130,246,0); }
+}
+#btnStart.pulse { animation: pulse-border 2s infinite; }
+</style>
+<div class="max-w-6xl mx-auto">
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-2xl font-bold">测速</h2>
+        <div class="flex gap-3">
+            <button id="btnStart" onclick="startSpeedTest()" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition shadow-sm flex items-center gap-2">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z"/></svg>
+                开始测速
+            </button>
+            <button id="btnStop" onclick="stopSpeedTest()" style="display:none" class="px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition shadow-sm flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/></svg>
+                停止
+            </button>
+        </div>
+    </div>
+
+    <!-- Progress & Log -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Main log area -->
+        <div class="lg:col-span-2 rounded-xl border shadow-sm flex flex-col overflow-hidden transition-all duration-200 hover:-translate-y-1 hover:shadow-lg" style="background:var(--glass-bg);border-color:var(--glass-border)">
+            <div class="px-5 py-3 flex items-center justify-between" style="border-bottom:1px solid var(--glass-border);background:var(--bg_page)">
+                <h3 class="font-semibold">实时日志</h3>
+                <span id="logStatus" class="text-xs text-secondary">等待开始...</span>
+            </div>
+            <div id="logContainer" class="flex-1 p-4 font-mono text-xs leading-relaxed overflow-y-auto rounded-b-xl" style="min-height: 400px; max-height: 600px; background: var(--log-bg); color: var(--text)">
+                <div class="text-gray-500 italic">点击「开始测速」运行...</div>
+            </div>
+        </div>
+
+        <!-- Side panel -->
+        <div class="space-y-4">
+            <!-- Progress card -->
+            <div class="rounded-xl p-5 border shadow-sm" style="background:var(--glass-bg);border-color:var(--glass-border)">
+                <h3 class="font-semibold mb-4">实时进度</h3>
+                <div id="statusText" class="text-sm" style="color:var(--text-muted)">等待开始...</div>
+                <div class="mt-3 mb-1">
+                    <div class="w-full h-2.5 rounded-full overflow-hidden" style="background:var(--glass-border)">
+                        <div id="progressBar" class="h-full rounded-full transition-all duration-300" style="width:0%;background:linear-gradient(90deg,#3b82f6,#22c55e)"></div>
+                    </div>
+                </div>
+                <div class="flex justify-between text-xs" style="color:var(--text-muted)">
+                    <span id="progressPercent">0%</span>
+                    <span id="phaseIndicator">空闲</span>
+                </div>
+                <div class="mt-3 text-xs hidden" id="runIdRow" style="color:var(--text-muted)">
+                    编号: <span id="runIdText" class="font-mono">-</span>
+                </div>
+            </div>
+            <!-- Current Config -->
+            <div class="rounded-xl p-5 border shadow-sm" style="background:var(--glass-bg);border-color:var(--glass-border)">
+                <h3 class="font-semibold mb-3">当前配置</h3>
+                <div id="configContent" class="text-xs">
+                    <div class="text-center py-4" style="color:var(--text-muted)">加载中...</div>
+                </div>
+            </div>
+            <!-- Recent Runs -->
+            <div class="rounded-xl p-5 border shadow-sm" style="background:var(--glass-bg);border-color:var(--glass-border)">
+                <h3 class="font-semibold mb-3">近期运行</h3>
+                <div id="recentRunsContent" class="text-xs">
+                    <div class="text-center py-4" style="color:var(--text-muted)">加载中...</div>
+                </div>
+            </div>
+            <!-- Results preview -->
+            <div class="rounded-xl p-5 border shadow-sm" style="background:var(--glass-bg);border-color:var(--glass-border)">
+                <h3 class="font-semibold mb-3">结果预览</h3>
+                <div id="previewContent" class="text-sm">
+                    <div class="text-center py-6" style="color:var(--text-muted)">等待测速完成...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let eventSource = null;
+let isRunning = false;
+
+function startSpeedTest() {
+    if (isRunning) return;
+    document.getElementById('logContainer').innerHTML = '';
+    document.getElementById('progressBar').style.width = '0%';
+    document.getElementById('progressPercent').textContent = '0%';
+    document.getElementById('statusText').textContent = '启动中...';
+    document.getElementById('phaseIndicator').textContent = '启动中...';
+    document.getElementById('runIdRow')?.classList.add('hidden');
+
+    fetch('/api/speedtest/start', { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) {
+                document.getElementById('logContainer').innerHTML = `<div class="text-red-400">错误: ${data.error}</div>`;
+                return;
+            }
+            isRunning = true;
+            document.getElementById('btnStart').style.display = 'none';
+            document.getElementById('btnStart').classList.remove('pulse');
+            document.getElementById('btnStop').style.display = 'flex';
+            document.getElementById('runIdText').textContent = data.run_id || '?';
+            document.getElementById('runIdRow').classList.remove('hidden');
+            document.getElementById('logStatus').textContent = '连接中...';
+            document.getElementById('statusText').textContent = '⏳ 运行中';
+            document.getElementById('phaseIndicator').textContent = '启动中...';
+            connectSSE();
+        })
+        .catch(e => {
+            document.getElementById('logContainer').innerHTML = `<div class="text-red-400">启动失败: ${e.message}</div>`;
+        });
+}
+
+function stopSpeedTest() {
+    fetch('/api/speedtest/stop', { method: 'POST' });
+    if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+    }
+    isRunning = false;
+    document.getElementById('btnStart').style.display = 'flex';
+    document.getElementById('btnStart').classList.add('pulse');
+    document.getElementById('btnStop').style.display = 'none';
+    document.getElementById('statusText').textContent = '已停止';
+    document.getElementById('logStatus').textContent = '已停止';
+    document.getElementById('progressBar').style.width = '100%';
+    document.getElementById('progressPercent').textContent = '已停止';
+    document.getElementById('phaseIndicator').textContent = '已停止';
+    document.getElementById('runIdRow')?.classList.add('hidden');
+}
+
+function connectSSE() {
+    if (eventSource) eventSource.close();
+
+    eventSource = new EventSource('/stream');
+    document.getElementById('logStatus').textContent = '已连接';
+
+    eventSource.onmessage = function(e) {
+        try {
+            const data = JSON.parse(e.data);
+            if (data.type === 'log') {
+                appendLog(data.line);
+                updateProgress(data.line);
+            } else if (data.type === 'heartbeat') {
+                // keep alive
+            } else if (data.type === 'done') {
+                onSpeedTestDone(data.run_id);
+            } else if (data.type === 'connected') {
+                document.getElementById('logStatus').textContent = '已连接';
+            }
+        } catch(err) {}
+    };
+
+    eventSource.onerror = function() {
+        if (isRunning) {
+            document.getElementById('logStatus').textContent = '重连中...';
+        }
+    };
+}
+
+function appendLog(line) {
+    const container = document.getElementById('logContainer');
+    const div = document.createElement('div');
+    div.textContent = line;
+
+    // Color-code based on content
+    if (line.includes('错误') || line.includes('Error') || line.includes('失败')) {
+        div.style.color = '#f87171';
+    } else if (line.includes('完成') || line.includes('成功') || line.includes('✅')) {
+        div.style.color = '#4ade80';
+    } else if (line.includes('进度') || line.includes('测速') || line.includes('测试')) {
+        div.style.color = '#60a5fa';
+    } else if (line.includes('警告')) {
+        div.style.color = '#fbbf24';
+    }
+
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+}
+
+function updateProgress(line) {
+    // Try to extract progress from log lines
+    const m = line.match(/(\d+)\/(\d+)\s*\(([\d.]+)%\)/);
+    if (m) {
+        const pct = Math.round(parseFloat(m[3]));
+        document.getElementById('progressBar').style.width = Math.min(pct, 100) + '%';
+        document.getElementById('progressPercent').textContent = pct + '%';
+    }
+    // Bandwidth progress
+    const bw = line.match(/\[带宽测速\]\s*进度：(\d+)\/(\d+)/);
+    if (bw) {
+        const pct = Math.round((parseInt(bw[1]) / parseInt(bw[2])) * 100);
+        document.getElementById('progressBar').style.width = Math.min(pct, 100) + '%';
+        document.getElementById('progressPercent').textContent = pct + '%';
+    }
+    // Detect final results
+    if (line.includes('最终优选节点') || line.includes('结果已保存到')) {
+        document.getElementById('progressBar').style.width = '100%';
+        document.getElementById('progressPercent').textContent = '完成';
+    }
+
+    // Phase indicator
+    const phaseEl = document.getElementById('phaseIndicator');
+    if (phaseEl) {
+        if (line.includes('数据源')) phaseEl.textContent = '📥 数据源';
+        else if (line.includes('前置过滤')) phaseEl.textContent = '🔍 前置过滤';
+        else if (line.includes('TCP 连接测试')) phaseEl.textContent = '📡 TCP 连接测试';
+        else if (line.includes('可用性检测')) phaseEl.textContent = '✅ 可用性检测';
+        else if (line.includes('HTTP检测') || line.includes('HTTP 检测')) phaseEl.textContent = '🌐 HTTP 检测';
+        else if (line.includes('带宽测速')) phaseEl.textContent = '🚀 带宽测速';
+        else if (line.includes('输出') || line.includes('写入') || line.includes('同步')) phaseEl.textContent = '📋 输出/同步';
+    }
+}
+
+function onSpeedTestDone(runId) {
+    isRunning = false;
+    document.getElementById('btnStart').style.display = 'flex';
+    document.getElementById('btnStart').classList.add('pulse');
+    document.getElementById('btnStop').style.display = 'none';
+    document.getElementById('statusText').textContent = '✅ 完成';
+    document.getElementById('logStatus').textContent = '已完成';
+    document.getElementById('progressBar').style.width = '100%';
+    document.getElementById('progressPercent').textContent = '完成';
+
+    if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+    }
+
+    loadRecentRuns();
+    // Load results preview
+    fetch('/api/runs/' + (runId || ''))
+        .then(r => r.json())
+        .then(run => {
+            if (run.error) return;
+            const preview = document.getElementById('previewContent');
+            if (run.results_json) {
+                try {
+                    const rj = JSON.parse(run.results_json);
+                    const nodes = rj.nodes || [];
+                    if (nodes.length > 0) {
+                        // Show summary stats
+                        const bestBw = Math.max(...nodes.map(n => n.bandwidth));
+                        const avgBw = nodes.reduce((s,n) => s+n.bandwidth, 0) / nodes.length;
+                        let html = '<div class="grid grid-cols-2 gap-2 mb-3">' +
+                            '<div class="text-center p-2 rounded-lg" style="background:var(--bg-page);border:1px solid var(--glass-border)">' +
+                            '<div class="text-xs" style="color:var(--text-muted)">节点</div><div class="text-sm font-bold mt-0.5">' + nodes.length + '</div></div>' +
+                            '<div class="text-center p-2 rounded-lg" style="background:var(--bg-page);border:1px solid var(--glass-border)">' +
+                            '<div class="text-xs" style="color:var(--text-muted)">最优</div><div class="text-sm font-bold mt-0.5" style="color:#22c55e">' + bestBw.toFixed(1) + 'M</div></div>' +
+                            '</div>' +
+                            '<div class="space-y-1.5">';
+                        nodes.slice(0, 5).forEach((n, i) => {
+                            const region = n.node.includes('#') ? n.node.split('#')[1] : '';
+                            const ip = n.node.split('#')[0];
+                            html += `<div class="flex items-center justify-between p-2 rounded-lg" style="background:var(--bg-page);border:1px solid var(--glass-border)">` +
+                                `<span class="font-mono text-xs truncate max-w-[110px]">${ip}</span>` +
+                                (region ? `<span class="text-xs px-1 rounded" style="background:var(--glass-border);color:var(--text-muted)">${region}</span>` : '') +
+                                `<span class="font-mono text-xs" style="color:#22c55e;font-weight:600">${n.bandwidth.toFixed(1)}M</span></div>`;
+                        });
+                        if (nodes.length > 5) {
+                            html += `<div class="text-center text-xs mt-2" style="color:var(--text-muted)">...还有 ${nodes.length - 5} 个节点</div>`;
+                        }
+                        html += '</div>';
+                        preview.innerHTML = html;
+                    } else {
+                        preview.innerHTML = '<div class="text-center py-4 text-secondary">无有效节点</div>';
+                    }
+                } catch(e) {
+                    preview.innerHTML = '<div class="text-center py-4 text-secondary">解析结果失败</div>';
+                }
+            } else {
+                preview.innerHTML = '<div class="text-center py-4 text-secondary">无结果数据</div>';
+            }
+        });
+}
+
+// ===== 加载当前配置 =====
+function loadConfig() {
+    fetch('/api/config').then(r=>r.json()).then(cfg=>{
+        const el=document.getElementById('configContent');
+        if(!el)return;
+        const items=[
+            {label:'模式',val:cfg.USE_GLOBAL_MODE?'🌍 全局':'🗺️ 分国家'},
+            {label:'TCP超时',val:cfg.TIMEOUT+'s'},
+            {label:'可用性检测',val:cfg.TEST_AVAILABILITY?'✅ 开启':'❌ 关闭'},
+            {label:'HTTP检测',val:cfg.HTTP_TEST_ENABLED?'✅ 开启':'❌ 关闭'},
+            {label:'带宽候选',val:cfg.BANDWIDTH_CANDIDATES+' 个'},
+            {label:'最终节点',val:cfg.USE_GLOBAL_MODE?cfg.GLOBAL_TOP_N+'个':'每国'+cfg.PER_COUNTRY_TOP_N+'个'},
+            {label:'DNS更新',val:cfg.CF_ENABLED?'✅ '+cfg.DNS_RECORD_TYPE:'❌ 关闭'},
+        ];
+        let html='<div class="space-y-1.5">';
+        items.forEach(i=>{html+='<div class="flex justify-between py-1.5" style="border-bottom:1px solid var(--glass-border)">'+
+            '<span class="text-xs" style="color:var(--text-muted)">'+i.label+'</span>'+
+            '<span class="text-xs font-medium">'+i.val+'</span></div>';});
+        html+='</div>';
+        el.innerHTML=html;
+    }).catch(()=>{const el=document.getElementById('configContent');if(el)el.innerHTML='<div class="text-center" style="color:var(--text-muted)">加载失败</div>';});
+}
+
+// ===== 加载近期运行 =====
+function loadRecentRuns() {
+    fetch('/api/runs?page=1&limit=5').then(r=>r.json()).then(d=>{
+        const el=document.getElementById('recentRunsContent');
+        if(!el)return;
+        const runs=d.runs||[];
+        if(runs.length===0){el.innerHTML='<div class="text-center" style="color:var(--text-muted)">暂无记录</div>';return;}
+        let html='<div class="space-y-1.5">';
+        runs.forEach(r=>{
+            const s=r.status==='completed'?'✅':r.status==='running'?'⏳':'❌';
+            const t=r.started_at?new Date(r.started_at).toLocaleString():'-';
+            html+='<div class="flex items-center justify-between py-1.5" style="border-bottom:1px solid var(--glass-border)">'+
+                '<span class="truncate text-xs max-w-[140px]">'+t+'</span>'+
+                '<div class="flex items-center gap-1.5">'+
+                '<span class="text-xs" style="color:var(--text-muted)">'+(r.passed_nodes||0)+'/'+(r.total_nodes||0)+'</span>'+
+                '<a href="/run/'+r.id+'" class="text-xs" style="color:var(--accent)">详情→</a></div></div>';
+        });
+        html+='</div>';
+        el.innerHTML=html;
+    }).catch(()=>{const el=document.getElementById('recentRunsContent');if(el)el.innerHTML='<div class="text-center" style="color:var(--text-muted)">加载失败</div>';});
+}
+
+// ===== 页面加载 =====
+loadConfig();
+loadRecentRuns();
+</script>
+{% endblock %}
