@@ -44,4 +44,5 @@ print('Database initialized.')
 "
 
 # Start gunicorn
-exec gunicorn --bind 0.0.0.0:6006 --workers 2 --threads 4 --timeout 120 app:app
+# workers=1 防止调度器线程被多个worker重复启动
+exec gunicorn --bind 0.0.0.0:6006 --workers 1 --threads 8 --timeout 120 app:app

@@ -1687,10 +1687,12 @@ def run_detail(run_id):
 # Main
 # ---------------------------------------------------------------------------
 
+# 启动定时调度器（Gunicorn 导入时即启动，不依赖 __main__）
+start_scheduler()
+
 if __name__ == "__main__":
     print(f"* CFST Dashboard starting on http://0.0.0.0:6006")
     print(f"* Config: {CONFIG_PATH}")
     print(f"* Database: {DB_PATH}")
     ensure_config_symlink()
-    start_scheduler()
     app.run(host="0.0.0.0", port=6006, debug=True, threaded=True)
