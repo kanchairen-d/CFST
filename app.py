@@ -800,8 +800,18 @@ def load_schedule():
     return cfg
 
 def save_schedule(cfg):
+    # Merge with existing data to preserve server-managed fields (last_run, etc.)
+    # that the browser does not send in the POST
+    existing = {}
+    if os.path.exists(SCHEDULE_CONFIG_PATH):
+        with open(SCHEDULE_CONFIG_PATH, "r") as f:
+            try:
+                existing = json.load(f)
+            except Exception:
+                existing = {}
+    existing.update(cfg)
     with open(SCHEDULE_CONFIG_PATH, "w") as f:
-        json.dump(cfg, f, indent=2)
+        json.dump(existing, f, indent=2)
 
 @app.route("/api/schedule")
 def api_get_schedule():
@@ -905,7 +915,10 @@ def _check_and_run(cfg):
 
 def _trigger_auto_test(cfg):
     if runner.is_running:
-        return  # Already running, skip
+        # Already running - update last_run so next check doesn't keep looping
+        cfg["last_run"] = _dt.now().isoformat()
+        save_schedule(cfg)
+        return
     ok = runner.start()
     if ok:
         # Mark last_run
