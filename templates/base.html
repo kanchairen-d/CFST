@@ -165,8 +165,8 @@
                 flex-wrap: wrap;
                 justify-content: space-between;
                 padding: 10px 16px;
-                position: static;
-                background: transparent;
+                position: sticky;
+                background: var(--bg-page);
                 backdrop-filter: none;
                 -webkit-backdrop-filter: none;
             }
@@ -291,7 +291,7 @@
 
         /* ===== Scrollbar ===== */
         ::-webkit-scrollbar { width: 5px; }
-        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-track { background: var(--bg-page); }
         ::-webkit-scrollbar-thumb { background: var(--text-muted); border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
 
@@ -306,7 +306,7 @@
 
         /* ===== Compatibility aliases ===== */
         .bg-card { background: var(--glass-bg); }
-        .bg-secondary { background: transparent; }
+        .bg-secondary { background: var(--bg-page); }
         .text-secondary { color: var(--text-secondary); }
         .border-color { border-color: var(--glass-border); }
         .input-bg { background: var(--input-bg); }
