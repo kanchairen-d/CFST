@@ -64,8 +64,10 @@
             <!-- Recent Runs -->
             <div class="rounded-xl p-5 border shadow-sm" style="background:var(--glass-bg);border-color:var(--glass-border)">
                 <h3 class="font-semibold mb-3">近期运行</h3>
-                <div id="recentRunsContent" class="text-xs">
-                    <div class="text-center py-4" style="color:var(--text-muted)">加载中...</div>
+                <div id="recentRunsContainer" class="max-h-[360px] overflow-y-auto pr-1" style="scrollbar-width:thin">
+                    <div id="recentRunsContent" class="text-xs">
+                        <div class="text-center py-4" style="color:var(--text-muted)">加载中...</div>
+                    </div>
                 </div>
             </div>
             <!-- Results preview -->
@@ -303,24 +305,28 @@ function loadConfig() {
 
 // ===== 加载近期运行 =====
 function loadRecentRuns() {
-    fetch('/api/runs?page=1&limit=5').then(r=>r.json()).then(d=>{
+    fetch('/api/runs?page=1').then(r=>r.json()).then(d=>{
         const el=document.getElementById('recentRunsContent');
         if(!el)return;
         const runs=d.runs||[];
-        if(runs.length===0){el.innerHTML='<div class="text-center" style="color:var(--text-muted)">暂无记录</div>';return;}
-        let html='<div class="space-y-1.5">';
+        if(runs.length===0){el.innerHTML='<div class="text-center py-4" style="color:var(--text-muted)">暂无记录</div>';return;}
+        let html='<div class="space-y-0.5">';
         runs.forEach(r=>{
             const s=r.status==='completed'?'✅':r.status==='running'?'⏳':'❌';
             const t=r.started_at?new Date(r.started_at).toLocaleString():'-';
-            html+='<div class="flex items-center justify-between py-1.5" style="border-bottom:1px solid var(--glass-border)">'+
-                '<span class="truncate text-xs max-w-[140px]">'+t+'</span>'+
-                '<div class="flex items-center gap-1.5">'+
+            html+='<div class="flex items-center justify-between py-1.5 px-1" style="border-bottom:1px solid var(--glass-border)">'+
+                '<div class="flex items-center gap-2 min-w-0">'+
+                '<span>'+s+'</span>'+
+                '<span class="truncate text-xs max-w-[200px]">'+t+'</span>'+
+                '</div>'+
+                '<div class="flex items-center gap-1.5 shrink-0">'+
                 '<span class="text-xs" style="color:var(--text-muted)">'+(r.passed_nodes||0)+'/'+(r.total_nodes||0)+'</span>'+
-                '<a href="/run/'+r.id+'" class="text-xs" style="color:var(--accent)">详情→</a></div></div>';
+                '<a href="/run/'+r.id+'" class="text-xs" style="color:var(--accent)">详情</a>'+
+                '</div></div>';
         });
         html+='</div>';
         el.innerHTML=html;
-    }).catch(()=>{const el=document.getElementById('recentRunsContent');if(el)el.innerHTML='<div class="text-center" style="color:var(--text-muted)">加载失败</div>';});
+    }).catch(()=>{const el=document.getElementById('recentRunsContent');if(el)el.innerHTML='<div class="text-center py-4" style="color:var(--text-muted)">加载失败</div>';});
 }
 
 // ===== 页面加载 =====

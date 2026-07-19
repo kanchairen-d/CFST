@@ -1,10 +1,23 @@
 {% extends "base.html" %}
 {% block content %}
+<style>
+.btn-ghost-danger {
+    color: var(--danger);
+    border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+    background: color-mix(in srgb, var(--danger) 6%, transparent);
+    transition: all 0.2s;
+    cursor: pointer;
+}
+.btn-ghost-danger:hover {
+    background: color-mix(in srgb, var(--danger) 15%, transparent);
+    box-shadow: 0 2px 8px color-mix(in srgb, var(--danger) 20%, transparent);
+}
+</style>
 <div class="max-w-4xl mx-auto">
   <div class="flex items-center justify-between mb-6">
     <h2 class="text-xl font-bold">设置</h2>
     <div class="flex gap-2">
-      <button onclick="restoreDefaults()" class="px-4 py-2 text-sm rounded-lg" style="color:var(--text-muted);border:1px solid var(--glass-border)">↩ 恢复默认</button>
+      <button onclick="restoreDefaults()" class="btn-ghost-danger px-4 py-2 text-sm rounded-lg">↩ 恢复默认</button>
       <button onclick="saveAllGroups()" class="btn-primary px-5 py-2 text-sm rounded-lg">💾 全部保存</button>
     </div>
   </div>
