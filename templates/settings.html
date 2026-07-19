@@ -169,9 +169,12 @@ function renderField(key, val) {
     CONFIG[key] = [uid];
     return `<div class="py-1" data-key="${key}">
       <label class="block text-sm mb-1">${label}</label>
-      <input type="text" id="${id}" class="input-field w-full px-3 py-1.5 text-sm font-mono"
-        value="${uid.replace(/"/g,'&quot;')}" placeholder="输入 WxPusher UID"
-        onchange="CONFIG['${key}']=[this.value.trim()]">
+      <div class="relative">
+        <input type="password" id="${id}" class="input-field w-full px-3 py-1.5 text-sm font-mono pr-8"
+          value="${uid.replace(/"/g,'&quot;')}" placeholder="输入 WxPusher UID"
+          onchange="CONFIG['${key}']=[this.value.trim()]">
+        <button type="button" onclick="togglePW(this)" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-sm leading-none cursor-pointer" style="color:var(--text-muted)" title="显示/隐藏密码">👁</button>
+      </div>
     </div>`;
   }
 
@@ -719,8 +722,14 @@ async function loadEdgetunnel() {
           </div>
         </div>
         <div class="space-y-2 kv-fields" ${isKv?'':'style="display:none"'}>
-          <input type="text" class="input-field w-full px-3 py-1.5 text-sm font-mono" value="${(ep.account_id||'').replace(/"/g,'&quot;')}" placeholder="CF Account ID" onchange="updateEpField(${i},'account_id',this.value)">
-          <input type="text" class="input-field w-full px-3 py-1.5 text-sm font-mono" value="${(ep.namespace_id||'').replace(/"/g,'&quot;')}" placeholder="KV Namespace ID" onchange="updateEpField(${i},'namespace_id',this.value)">
+          <div class="relative">
+            <input type="password" class="input-field w-full px-3 py-1.5 text-sm font-mono pr-8" value="${(ep.account_id||'').replace(/"/g,'&quot;')}" placeholder="CF Account ID" onchange="updateEpField(${i},'account_id',this.value)">
+            <button type="button" onclick="togglePW(this)" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-sm leading-none cursor-pointer" style="color:var(--text-muted)" title="显示/隐藏密码">👁</button>
+          </div>
+          <div class="relative">
+            <input type="password" class="input-field w-full px-3 py-1.5 text-sm font-mono pr-8" value="${(ep.namespace_id||'').replace(/"/g,'&quot;')}" placeholder="KV Namespace ID" onchange="updateEpField(${i},'namespace_id',this.value)">
+            <button type="button" onclick="togglePW(this)" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-sm leading-none cursor-pointer" style="color:var(--text-muted)" title="显示/隐藏密码">👁</button>
+          </div>
           <div class="relative">
             <input type="password" class="input-field w-full px-3 py-1.5 text-sm font-mono pr-8" value="${(ep.api_token||'').replace(/"/g,'&quot;')}" placeholder="CF API Token (KV:Write)" onchange="updateEpField(${i},'api_token',this.value)">
             <button type="button" onclick="togglePW(this)" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-sm leading-none cursor-pointer" style="color:var(--text-muted)" title="显示/隐藏密码">👁</button>
