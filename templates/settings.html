@@ -851,8 +851,14 @@ function addEp(mode) {
       </div>
     </div>
     <div class="space-y-2 kv-fields" ${isKv?'':'style="display:none"'}>
-      <input type="text" class="input-field w-full px-3 py-1.5 text-sm font-mono" placeholder="CF Account ID">
-      <input type="text" class="input-field w-full px-3 py-1.5 text-sm font-mono" placeholder="KV Namespace ID">
+      <div class="relative">
+        <input type="password" class="input-field w-full px-3 py-1.5 text-sm font-mono pr-8" placeholder="CF Account ID">
+        <button type="button" onclick="togglePW(this)" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-sm leading-none cursor-pointer" style="color:var(--text-muted)">👁</button>
+      </div>
+      <div class="relative">
+        <input type="password" class="input-field w-full px-3 py-1.5 text-sm font-mono pr-8" placeholder="KV Namespace ID">
+        <button type="button" onclick="togglePW(this)" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-sm leading-none cursor-pointer" style="color:var(--text-muted)">👁</button>
+      </div>
       <div class="relative">
         <input type="password" class="input-field w-full px-3 py-1.5 text-sm font-mono pr-8" placeholder="CF API Token (KV:Write)">
         <button type="button" onclick="togglePW(this)" class="absolute right-1.5 top-1/2 -translate-y-1/2 text-sm leading-none cursor-pointer" style="color:var(--text-muted)">👁</button>
