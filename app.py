@@ -659,7 +659,10 @@ def api_speedtest_start():
     ok = runner.start()
     if not ok:
         return jsonify({"error": "failed to start"}), 500
-    return jsonify({"ok": True, "run_id": runner.get_run_id()})
+    conn = get_db()
+    run_cnt = conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0]
+    conn.close()
+    return jsonify({"ok": True, "run_id": runner.get_run_id(), "run_number": run_cnt})
 
 @app.route("/api/speedtest/stop", methods=["POST"])
 def api_speedtest_stop():
