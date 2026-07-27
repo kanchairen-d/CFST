@@ -648,6 +648,24 @@ def api_restore_defaults():
     ensure_config_symlink()
     return jsonify({"ok": True})
 
+@app.route("/api/notify/test", methods=["POST"])
+def api_notify_test():
+    """测试通知渠道"""
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "no data"}), 400
+    ch_type = data.get("type", "")
+    ch_config = data.get("config", {})
+    try:
+        from notifier.channels import channel_senders
+        sender = channel_senders.get(ch_type)
+        if not sender:
+            return jsonify({"error": f"未知渠道: {ch_type}"}), 400
+        ok = sender(ch_config, "测试消息", "这是一条来自 CFST 的测试消息", "info")
+        return jsonify({"ok": ok})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # ---------------------------------------------------------------------------
 # Speed Test API
 # ---------------------------------------------------------------------------
@@ -659,7 +677,10 @@ def api_speedtest_start():
     ok = runner.start()
     if not ok:
         return jsonify({"error": "failed to start"}), 500
-    return jsonify({"ok": True, "run_id": runner.get_run_id()})
+    conn = get_db()
+    run_cnt = conn.execute("SELECT COUNT(*) FROM runs").fetchone()[0]
+    conn.close()
+    return jsonify({"ok": True, "run_id": runner.get_run_id(), "run_number": run_cnt})
 
 @app.route("/api/speedtest/stop", methods=["POST"])
 def api_speedtest_stop():
@@ -1694,7 +1715,11 @@ def api_github_sync_latest():
 
 @app.route("/run/<int:run_id>")
 def run_detail(run_id):
-    return render_template("run_detail.html", run_id=run_id)
+    conn = get_db()
+    row = conn.execute("SELECT COUNT(*) as cnt FROM runs WHERE id <= ?", (run_id,)).fetchone()
+    display_num = row["cnt"] if row else 0
+    conn.close()
+    return render_template("run_detail.html", run_id=run_id, display_num=display_num)
 
 # ---------------------------------------------------------------------------
 # Main

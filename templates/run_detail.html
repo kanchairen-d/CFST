@@ -2,7 +2,7 @@
 {% block content %}
 <div class="max-w-6xl mx-auto">
     <div class="flex items-center justify-between mb-6">
-        <h2 class="text-2xl font-bold">运行详情 #{{ run_id }}</h2>
+        <h2 class="text-2xl font-bold">运行详情 <span id="runTitleNumber">#{{ display_num }}</span></h2>
         <a href="/history" class="px-4 py-2 text-sm rounded-lg transition flex items-center gap-1" style="background:var(--glass-border);color:var(--text)">← 返回历史</a>
     </div>
 
@@ -109,6 +109,8 @@ async function loadRunDetail() {
         }
 
         const statusMap = { 'completed': '✅ 完成', 'failed': '❌ 失败', 'stopped': '⏹ 已停止', 'running': '⏳ 运行中' };
+        // Update page title with display_num
+        document.getElementById('runTitleNumber').textContent = '#' + run.display_num;
         const passRate = run.total_nodes > 0 ? ((run.passed_nodes / run.total_nodes) * 100).toFixed(0) : 0;
         const bw = run.best_bandwidth > 0 ? run.best_bandwidth.toFixed(2) + ' Mbps' : '-';
         const lat = run.best_latency > 0 && run.best_latency < 999 ? run.best_latency.toFixed(2) + ' ms' : '-';

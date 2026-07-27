@@ -18,6 +18,9 @@ import time
 import sys
 import re
 import os
+
+# 通知渠道模块
+from notifier import Notifier
 import subprocess
 import shutil
 import json
@@ -222,7 +225,7 @@ def load_config():
         "OUTPUT_FILE": "ip.txt",
         "ENABLE_LOGGING": False,
         "LOG_FILE": "cfst.log",
-        "FORCE_DIRECT": True,
+        "FORCE_DIRECT": False,
         "TEST_AVAILABILITY": True,
         "AVAILABILITY_CHECK_API": ["https://api.090227.xyz/check"],
         "AVAILABILITY_TIMEOUT": 3,
@@ -325,14 +328,29 @@ PRE_FILTER_BLOCKED_ENABLED = cfg["PRE_FILTER_BLOCKED_ENABLED"]
 PRE_FILTER_BLOCKED_COUNTRIES = [c.upper() for c in cfg["PRE_FILTER_BLOCKED_COUNTRIES"]]
 PRE_FILTER_PORT_ENABLED = cfg["PRE_FILTER_PORT_ENABLED"]
 PRE_FILTER_PORTS = [str(p) for p in cfg["PRE_FILTER_PORTS"]]
-ENABLE_WXPUSHER = cfg["ENABLE_WXPUSHER"]
-WXPUSHER_APP_TOKEN = cfg["WXPUSHER_APP_TOKEN"]
-WXPUSHER_UIDS = cfg["WXPUSHER_UIDS"]
-WXPUSHER_API_URL = cfg["WXPUSHER_API_URL"]
-ENABLE_PUSHPLUS = cfg["ENABLE_PUSHPLUS"]
-PUSHPLUS_TOKEN = cfg["PUSHPLUS_TOKEN"]
-NOTIFY_TIMEOUT = cfg["NOTIFY_TIMEOUT"]
-NOTIFY_CONNECT_TIMEOUT = cfg["NOTIFY_CONNECT_TIMEOUT"]
+ENABLE_WXPUSHER = cfg.get("ENABLE_WXPUSHER", False)
+WXPUSHER_APP_TOKEN = cfg.get("WXPUSHER_APP_TOKEN", "")
+WXPUSHER_UIDS = cfg.get("WXPUSHER_UIDS", [])
+WXPUSHER_API_URL = cfg.get("WXPUSHER_API_URL", "https://wxpusher.zjiecode.com/api/send/message")
+ENABLE_PUSHPLUS = cfg.get("ENABLE_PUSHPLUS", False)
+PUSHPLUS_TOKEN = cfg.get("PUSHPLUS_TOKEN", "")
+NOTIFY_TIMEOUT = cfg.get("NOTIFY_TIMEOUT", 3)
+NOTIFY_CONNECT_TIMEOUT = cfg.get("NOTIFY_CONNECT_TIMEOUT", 3)
+
+# 构建通知渠道列表（兼容旧配置）
+_channels = list(cfg.get("channels", []))
+if not _channels:
+    if ENABLE_WXPUSHER and WXPUSHER_APP_TOKEN and WXPUSHER_UIDS:
+        _channels.append({
+            "type": "wxpusher",
+            "config": {"appToken": WXPUSHER_APP_TOKEN, "uids": WXPUSHER_UIDS}
+        })
+    if ENABLE_PUSHPLUS and PUSHPLUS_TOKEN:
+        _channels.append({
+            "type": "pushplus",
+            "config": {"token": PUSHPLUS_TOKEN}
+        })
+notifier = Notifier(_channels)
 CF_ENABLED = cfg["CF_ENABLED"]
 CF_API_TOKEN = cfg["CF_API_TOKEN"]
 CF_ZONE_ID = cfg["CF_ZONE_ID"]
@@ -423,54 +441,13 @@ BANDWIDTH_URL = BANDWIDTH_URL_TEMPLATE.format(bytes=int(BANDWIDTH_SIZE_MB * 1024
 # ====================================================
 
 def send_notification(content, summary):
-    """发送通知：WxPusher 或 PushPlus"""
-    sent = False
-    # WxPusher
-    if ENABLE_WXPUSHER:
-        try:
-            payload = {
-                "appToken": WXPUSHER_APP_TOKEN,
-                "content": content,
-                "summary": summary,
-                "uids": WXPUSHER_UIDS
-            }
-            headers = {"Content-Type": "application/json; charset=utf-8"}
-            resp = requests.post(
-                WXPUSHER_API_URL,
-                data=json.dumps(payload),
-                headers=headers,
-                timeout=(NOTIFY_CONNECT_TIMEOUT, NOTIFY_TIMEOUT)
-            )
-            if resp.status_code == 200:
-                print("WxPusher 通知已发送")
-                sent = True
-            else:
-                print(f"WxPusher 通知发送失败: {resp.status_code}")
-        except Exception as e:
-            print(f"WxPusher 通知异常: {e}")
-    # PushPlus
-    if ENABLE_PUSHPLUS and PUSHPLUS_TOKEN:
-        try:
-            pp_payload = {
-                "token": PUSHPLUS_TOKEN,
-                "title": summary,
-                "content": content,
-                "template": "text"
-            }
-            resp = requests.post(
-                "https://www.pushplus.plus/send",
-                json=pp_payload,
-                timeout=(NOTIFY_CONNECT_TIMEOUT, NOTIFY_TIMEOUT)
-            )
-            if resp.status_code == 200:
-                print("PushPlus 通知已发送")
-                sent = True
-            else:
-                print(f"PushPlus 通知发送失败: {resp.status_code}")
-        except Exception as e:
-            print(f"PushPlus 通知异常: {e}")
-    if not sent:
-        print(f"通知：未启用任何推送（WxPusher={ENABLE_WXPUSHER}, PushPlus={ENABLE_PUSHPLUS}）")
+    """发送通知：通过 Notifier 发送到所有已配置渠道"""
+    results = notifier.send(summary, content, level="info")
+    ok = any(results.values())
+    if ok:
+        print(f"通知已发送: {', '.join(k for k, v in results.items() if v)}")
+    else:
+        print(f"通知：未启用任何推送渠道（共 {len(notifier._channels)} 个配置）")
 
 # 兼容旧函数名
 def send_wxpusher_notification(content, summary):
@@ -1110,8 +1087,7 @@ def check_http_server(node_str, timeout, max_retries, retry_delay, method, conne
                 "allow_redirects": False,
                 "headers": headers
             }
-            if FORCE_DIRECT:
-                request_kwargs["proxies"] = {"http": None, "https": None}
+            request_kwargs["proxies"] = {"http": None, "https": None}
 
             if method.upper() == "HEAD":
                 resp = requests.head(url, **request_kwargs)
@@ -1260,6 +1236,7 @@ def measure_bandwidth_curl(node_str):
         "-L",
         "-H", "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
         "--http2",
+        "--noproxy", "*",
         "--resolve", f"speed.cloudflare.com:{port}:{ip}",
         "--connect-timeout", str(BANDWIDTH_CONNECT_TIMEOUT),
         "--max-time", str(BANDWIDTH_TIMEOUT),

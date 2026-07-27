@@ -30,6 +30,7 @@
     "WXPUSHER_API_URL": "https://wxpusher.zjiecode.com/api/send/message",
     "NOTIFY_TIMEOUT": 3,
     "NOTIFY_CONNECT_TIMEOUT": 3,
+    "channels": [],
     "CF_ENABLED": true,
     "CF_API_TOKEN": "",
     "CF_ZONE_ID": "",
