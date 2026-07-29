@@ -796,7 +796,9 @@ function renderChannelsHtml(channels) {
     html += '</div></div>';
     html += '<div class="ch-config" id="ch-'+idx+'" style="'+(isEnabled?'':'display:none')+'">';
     info.fields.forEach(f => {
-      const val = cfg[f.key] || '';
+      let val = cfg[f.key];
+      if (Array.isArray(val)) val = val.join(',');
+      val = val || '';
       html += '<div class="flex items-center gap-2 mb-2">';
       html += '<span class="text-xs w-24 shrink-0" style="color:var(--text-muted)">'+f.label+'</span>';
       if (f.type === 'select') {
