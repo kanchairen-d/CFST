@@ -32,7 +32,7 @@ const GROUPS = [
   { title: '⏰ 自动测速', fields: ['_SCHEDULE'] },
   { title: '📤 GitHub 同步', fields: ['_GITHUB'] },
   { title: '🔄 Edgetunnel 同步', fields: ['_EDGETUNNEL'] },
-  { title: '💬 推送通知', fields: ['ENABLE_WXPUSHER','WXPUSHER_APP_TOKEN','WXPUSHER_UIDS','WXPUSHER_API_URL','ENABLE_PUSHPLUS','PUSHPLUS_TOKEN','NOTIFY_TIMEOUT','NOTIFY_CONNECT_TIMEOUT','_WX_NOTIFY_HELP'] },
+  { title: '💬 推送通知', fields: ['channels','_NOTIFY_CHANNEL_HELP'] },
   { title: '⚙️ 基本设置', fields: ['USE_GLOBAL_MODE','GLOBAL_TOP_N','PER_COUNTRY_TOP_N','TCP_PROBES','TCP_LATENCY_WEIGHT','MIN_SUCCESS_RATE','TIMEOUT','SOCKET_DEFAULT_TIMEOUT','PROGRESS_PRINT_INTERVAL'] },
   { title: '🚧 前置过滤', fields: ['PRE_FILTER_PORT_ENABLED','PRE_FILTER_PORTS','PRE_FILTER_BLOCKED_ENABLED','PRE_FILTER_BLOCKED_COUNTRIES','FILTER_COUNTRIES_ENABLED','ALLOWED_COUNTRIES'] },
   { title: '🌐 DNS 过滤', fields: ['FILTER_IPV6_AVAILABILITY','FILTER_BLOCKED_COUNTRIES_ENABLED','BLOCKED_COUNTRIES','DNS_IP_RISK_FILTER_ENABLED','DNS_IP_RISK_MAX_LEVEL'] },
@@ -196,19 +196,33 @@ function renderField(key, val) {
     </details>`;
   }
 
-  // Special: _WX_NOTIFY_HELP
-  if (key === '_WX_NOTIFY_HELP') {
-    return `<details class="rounded-lg p-3 cursor-pointer" style="background:var(--bg-page);border:1px solid var(--glass-border)">
-      <summary class="text-xs font-medium">📖 推送通知配置说明</summary>
-      <div class="mt-2 text-xs space-y-2" style="color:var(--text-muted);line-height:1.6">
-        <div class="mb-1"><b style="color:var(--text)">WxPusher</b> 和 <b style="color:var(--text)">PushPlus</b> 二选一即可，开启哪个就用哪个推送</div>
-        <div class="mt-1.5"><b style="color:var(--text)">WxPusher：</b></div>
-        <div>APP Token 在 <a href="https://wxpusher.zjiecode.com/" target="_blank" style="color:var(--accent)">wxpusher.zjiecode.com</a> 创建应用获取</div>
-        <div>下载 wxpusher App 登录并获取 UID</div>
-        <div class="mt-1.5"><b style="color:var(--text)">PushPlus：</b></div>
-        <div>Token 在 <a href="https://www.pushplus.plus/" target="_blank" style="color:var(--accent)">pushplus.plus</a> 扫码登录后获取，无需 UID</div>
-      </div>
-    </details>`;
+  // Special: _NOTIFY_CHANNEL_HELP
+  if (key === '_NOTIFY_CHANNEL_HELP') {
+    return `<div class="text-xs mt-2" style="color:var(--text-muted)">
+      勾选需要启用的推送渠道并填写对应的配置信息
+    </div>`;
+  }
+
+  // Special: channels (自定义添加推送渠道)
+  if (key === 'channels') {
+    const channels = CONFIG['channels'] || [];
+    // 迁移旧配置：如果 channels 为空但有旧字段，转换到新格式
+    if (channels.length === 0) {
+      if (CONFIG['ENABLE_WXPUSHER']) {
+        channels.push({
+          type: 'wxpusher', enabled: true,
+          config: { appToken: CONFIG['WXPUSHER_APP_TOKEN'] || '', uids: (Array.isArray(CONFIG['WXPUSHER_UIDS']) ? CONFIG['WXPUSHER_UIDS'] : []).join(',') }
+        });
+      }
+      if (CONFIG['ENABLE_PUSHPLUS']) {
+        channels.push({
+          type: 'pushplus', enabled: true,
+          config: { token: CONFIG['PUSHPLUS_TOKEN'] || '', template: 'html', channel: 'wechat' }
+        });
+      }
+    }
+    CONFIG['channels'] = channels;
+    return '<div class="space-y-3" id="channels-container">' + renderChannelsHtml(channels) + '</div>';
   }
 
   // Special: _SCHEDULE, _GITHUB, _EDGETUNNEL (sentinel fields for custom sections)
@@ -583,6 +597,7 @@ async function loadConfig() {
     const filtered = {};
     Object.entries(CONFIG).forEach(([k,v]) => { if (!k.startsWith('_')) filtered[k]=v; });
     CONFIG = filtered;
+    CONFIG['channels'] = CONFIG['channels'] || [];
 
     const container = document.getElementById('settings-container');
     container.innerHTML = GROUPS.map((g, gi) => `
@@ -661,11 +676,153 @@ function saveGroup(gi) {
     }
     data['ADDITIONAL_SOURCES'] = CONFIG['ADDITIONAL_SOURCES'] || [];
   }
+  if (g.fields.includes('channels')) {
+    // Read from CONFIG (already updated by DOM state via change listeners)
+    document.querySelectorAll('.ch-enable').forEach(cb => {
+      const idx = parseInt(cb.dataset.chIdx);
+      if (!isNaN(idx) && CONFIG['channels'] && CONFIG['channels'][idx]) {
+        CONFIG['channels'][idx].enabled = cb.checked;
+      }
+    });
+    document.querySelectorAll('[data-ch-idx][data-ch-key]').forEach(inp => {
+      const idx = parseInt(inp.dataset.chIdx);
+      const key = inp.dataset.chKey;
+      if (!isNaN(idx) && CONFIG['channels'] && CONFIG['channels'][idx]) {
+        CONFIG['channels'][idx].config = CONFIG['channels'][idx].config || {};
+        CONFIG['channels'][idx].config[key] = inp.value;
+      }
+    });
+    // uids 特殊处理：逗号分隔转数组
+    if (CONFIG['channels']) {
+      CONFIG['channels'].forEach(ch => {
+        if (ch.config && ch.config.uids && typeof ch.config.uids === 'string') {
+          ch.config.uids = ch.config.uids.split(',').map(s => s.trim()).filter(Boolean);
+        }
+      });
+    }
+    data['channels'] = CONFIG['channels'] || [];
+  }
   fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)})
     .then(r => r.json())
     .then(d => showToast(d.ok ? '✅ '+g.title+' 已保存' : '❌ '+(d.error||'失败')))
     .catch(() => showToast('❌ '+g.title+' 保存失败'));
 }
+
+function testChannel(idx) {
+  if (!CONFIG['channels'] || !CONFIG['channels'][idx]) { showToast('❌ 渠道不存在'); return; }
+  const ch = CONFIG['channels'][idx];
+  const type = ch.type;
+  const config = {};
+  document.querySelectorAll('[data-ch-idx="'+idx+'"][data-ch-key]').forEach(inp => {
+    config[inp.dataset.chKey] = inp.value;
+  });
+  if (config.uids && typeof config.uids === 'string') {
+    config.uids = config.uids.split(',').map(s => s.trim()).filter(Boolean);
+  }
+  fetch('/api/notify/test', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({type, config})
+  })
+    .then(r => r.json())
+    .then(d => showToast(d.ok ? '✅ 测试消息发送成功' : '❌ 测试发送失败'+(d.error?': '+d.error:'')))
+    .catch(() => showToast('❌ 测试请求失败'));
+}
+
+// ===== Channel add/remove helpers =====
+function addChannel() {
+  const sel = document.getElementById('ch-add-select');
+  if (!sel) return;
+  const type = sel.value;
+  if (!type) { showToast('请选择渠道类型'); return; }
+  if (!CONFIG['channels']) CONFIG['channels'] = [];
+  CONFIG['channels'].push({type, enabled: true, config: {}});
+  sel.value = '';
+  document.getElementById('channels-container').innerHTML = renderChannelsHtml(CONFIG['channels']);
+}
+function removeChannel(idx) {
+  if (!confirm('确定删除此渠道？')) return;
+  CONFIG['channels'].splice(idx, 1);
+  document.getElementById('channels-container').innerHTML = renderChannelsHtml(CONFIG['channels']);
+}
+function renderChannelsHtml(channels) {
+  const CHANNEL_INFO = {
+    "wechat": {"label":"企业微信","fields":[{"key":"webhook_url","label":"Webhook URL","type":"text","placeholder":"https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..."}]},
+    "dingtalk": {"label":"钉钉","fields":[{"key":"webhook_url","label":"Webhook URL","type":"text","placeholder":"https://oapi.dingtalk.com/robot/send?access_token=..."},{"key":"secret","label":"加签密钥(可选)","type":"text","placeholder":"SEC..."}]},
+    "feishu": {"label":"飞书","fields":[{"key":"webhook_url","label":"Webhook URL","type":"text","placeholder":"https://open.feishu.cn/open-apis/bot/v2/hook/..."}]},
+    "bark": {"label":"Bark","fields":[{"key":"key","label":"推送 Key","type":"text","placeholder":"xxxxxxxxxxxxxxxx"},{"key":"base_url","label":"自建地址(可选)","type":"text","placeholder":"https://api.day.app"}]},
+    "pushplus": {"label":"PushPlus","fields":[{"key":"token","label":"Token","type":"text","placeholder":""},{"key":"template","label":"模板","type":"select","options":["html","txt","markdown"]},{"key":"channel","label":"渠道","type":"select","options":["wechat","webhook","cp","mail","sms"]}]},
+    "magic_push": {"label":"魔法推送","fields":[{"key":"base_url","label":"服务器地址","type":"text","placeholder":""},{"key":"token","label":"Token","type":"text","placeholder":""}]},
+    "wxpusher": {"label":"WxPusher","fields":[{"key":"appToken","label":"AppToken","type":"text","placeholder":"AT_..."},{"key":"uids","label":"UID(多个用逗号分隔)","type":"text","placeholder":"UID_..."}]},
+    "telegram": {"label":"Telegram","fields":[{"key":"bot_token","label":"Bot Token","type":"text","placeholder":""},{"key":"chat_id","label":"Chat ID","type":"text","placeholder":""}]},
+    "discord": {"label":"Discord","fields":[{"key":"webhook_url","label":"Webhook URL","type":"text","placeholder":"https://discord.com/api/webhooks/..."}]},
+    "serverchan": {"label":"Server酱","fields":[{"key":"send_key","label":"SendKey","type":"text","placeholder":"SCT..."}]},
+    "custom_webhook": {"label":"自定义Webhook","fields":[{"key":"url","label":"URL","type":"text","placeholder":""},{"key":"template","label":"格式","type":"select","options":["json","text"]}]},
+    "wechat_app": {"label":"企业微信应用","fields":[{"key":"corp_id","label":"企业ID","type":"text","placeholder":""},{"key":"corp_secret","label":"应用Secret","type":"text","placeholder":""},{"key":"agent_id","label":"AgentID","type":"text","placeholder":""},{"key":"to_user","label":"接收人","type":"text","placeholder":"@all"}]},
+    "smtp": {"label":"SMTP邮件","fields":[{"key":"server","label":"SMTP服务器","type":"text","placeholder":"smtp.example.com"},{"key":"port","label":"端口","type":"text","placeholder":"465"},{"key":"username","label":"用户名","type":"text","placeholder":""},{"key":"password","label":"密码","type":"text","placeholder":""},{"key":"to_addr","label":"接收邮箱","type":"text","placeholder":""}]}
+  };
+
+  channels = channels || [];
+  let html = '';
+  // 添加渠道按钮放在最上面
+  html += '<div class="mb-3 flex gap-2">';
+  html += '<select id="ch-add-select" class="input-field flex-1 px-3 py-1.5 text-sm">';
+  html += '<option value="">— 选择渠道类型 —</option>';
+  for (const [type, info] of Object.entries(CHANNEL_INFO)) {
+    html += '<option value="'+type+'">'+info.label+'</option>';
+  }
+  html += '</select>';
+  html += '<button onclick="addChannel()" class="px-3 py-1.5 text-xs rounded-lg" style="background:var(--accent);color:#fff">➕ 添加</button>';
+  html += '</div>';
+  channels.forEach((ch, idx) => {
+    const info = CHANNEL_INFO[ch.type];
+    if (!info) return;
+    const isEnabled = ch.enabled !== false;
+    const cfg = ch.config || {};
+    let sameCount = 0;
+    for (let i = 0; i <= idx; i++) { if (channels[i].type === ch.type) sameCount++; }
+    html += '<div class="rounded-lg p-3" style="background:var(--bg-page);border:1px solid var(--glass-border)">';
+    html += '<div class="flex items-center justify-between mb-2">';
+    html += '<div class="flex items-center gap-2">';
+    html += '<span class="text-sm font-medium">'+info.label+'</span>';
+    if (sameCount > 1) {
+      html += '<span class="text-xs px-1.5 py-0.5 rounded" style="background:var(--accent-light);color:var(--accent)">#'+sameCount+'</span>';
+    }
+    html += '</div>';
+    html += '<div class="flex items-center gap-2">';
+    html += '<label class="toggle"><input type="checkbox" class="ch-enable" data-ch-idx="'+idx+'" '+(isEnabled?'checked':'')+'><span class="toggle-track"></span></label>';
+    html += '<button onclick="testChannel('+idx+')" class="text-xs px-2 py-1 rounded" style="background:var(--glass-border);color:var(--text-muted)">测试</button>';
+    html += '<button onclick="removeChannel('+idx+')" class="text-xs px-2 py-1 rounded" style="color:var(--danger);border:1px solid var(--danger)">删除</button>';
+    html += '</div></div>';
+    html += '<div class="ch-config" id="ch-'+idx+'" style="'+(isEnabled?'':'display:none')+'">';
+    info.fields.forEach(f => {
+      const val = cfg[f.key] || '';
+      html += '<div class="flex items-center gap-2 mb-2">';
+      html += '<span class="text-xs w-24 shrink-0" style="color:var(--text-muted)">'+f.label+'</span>';
+      if (f.type === 'select') {
+        html += '<select class="input-field flex-1 px-3 py-1.5 text-sm" data-ch-idx="'+idx+'" data-ch-key="'+f.key+'">';
+        f.options.forEach(o => { html += '<option value="'+o+'" '+(val===o?'selected':'')+'>'+o+'</option>'; });
+        html += '</select>';
+      } else {
+        html += '<input type="text" class="input-field flex-1 px-3 py-1.5 text-sm" data-ch-idx="'+idx+'" data-ch-key="'+f.key+'" value="'+val.replace(/"/g,'&quot;')+'" placeholder="'+f.placeholder+'">';
+      }
+      html += '</div>';
+    });
+    html += '</div></div>';
+  });
+  return html;
+}
+
+// Toggle channel config visibility on checkbox change
+document.addEventListener('change', function(e) {
+  if (e.target.classList.contains('ch-enable')) {
+    const idx = e.target.dataset.chIdx;
+    const configDiv = document.getElementById('ch-'+idx);
+    if (configDiv) {
+      configDiv.style.display = e.target.checked ? '' : 'none';
+    }
+  }
+});
 
 async function saveAllGroups() {
   tokensRefresh();
@@ -743,6 +900,11 @@ async function loadEdgetunnel() {
       <div class="flex items-center justify-between px-3 py-2 rounded-lg" style="background:var(--bg-page);border:1px solid var(--glass-border)">
         <span class="text-sm font-medium">启用 Edgetunnel 同步</span>
         <label class="toggle"><input type="checkbox" id="eg_enabled" ${cfg.EDGETUNNEL_ENABLED?'checked':''}>
+        <span class="toggle-track"></span></label>
+      </div>
+      <div class="flex items-center justify-between px-3 py-2 rounded-lg" style="background:var(--bg-page);border:1px solid var(--glass-border)">
+        <span class="text-sm font-medium">手动测速后自动同步 <span class="text-xs" style="color:var(--text-muted)">（测速完自动同步到 EDT）</span></span>
+        <label class="toggle"><input type="checkbox" id="eg_auto_manual" ${cfg.AUTO_SYNC_AFTER_MANUAL_TEST?'checked':''}>
         <span class="toggle-track"></span></label>
       </div>
       <hr style="border-color:var(--glass-border);margin:8px 0">
@@ -878,6 +1040,7 @@ function toggleEpModeFromEvent(sel) {
 async function saveEdgetunnel() {
   const data = {
     EDGETUNNEL_ENABLED: document.getElementById('eg_enabled')?.checked || false,
+    AUTO_SYNC_AFTER_MANUAL_TEST: document.getElementById('eg_auto_manual')?.checked || false,
     EDGETUNNEL_ENDPOINTS: getEPs(),
   };
   try {
@@ -892,6 +1055,7 @@ async function saveEdgetunnel() {
 async function syncNow() {
   const data = {
     EDGETUNNEL_ENABLED: document.getElementById('eg_enabled')?.checked || false,
+    AUTO_SYNC_AFTER_MANUAL_TEST: document.getElementById('eg_auto_manual')?.checked || false,
     EDGETUNNEL_ENDPOINTS: getEPs(),
   };
   document.getElementById('eg_msg').textContent = '⏳ 保存并同步中...';

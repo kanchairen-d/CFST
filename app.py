@@ -648,6 +648,24 @@ def api_restore_defaults():
     ensure_config_symlink()
     return jsonify({"ok": True})
 
+@app.route("/api/notify/test", methods=["POST"])
+def api_notify_test():
+    """测试通知渠道"""
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "no data"}), 400
+    ch_type = data.get("type", "")
+    ch_config = data.get("config", {})
+    try:
+        from notifier.channels import channel_senders
+        sender = channel_senders.get(ch_type)
+        if not sender:
+            return jsonify({"error": f"未知渠道: {ch_type}"}), 400
+        ok = sender(ch_config, "测试消息", "这是一条来自 CFST 的测试消息", "info")
+        return jsonify({"ok": ok})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # ---------------------------------------------------------------------------
 # Speed Test API
 # ---------------------------------------------------------------------------
@@ -694,11 +712,13 @@ def stream():
             except queue.Empty:
                 break
         yield f"data: {json.dumps({'type': 'done', 'run_id': run_id})}\n\n"
-        # Auto sync to Edgetunnel after test completes
+        # Auto sync to Edgetunnel after test completes (check manual-test toggle)
         try:
-            print("[AutoSync] Starting sync after test complete...")
-            _auto_sync_edgetunnel()
-            print("[AutoSync] Sync completed")
+            eg_cfg = load_edgetunnel_config()
+            if eg_cfg.get("AUTO_SYNC_AFTER_MANUAL_TEST"):
+                print("[AutoSync] Starting sync after manual test complete...")
+                _auto_sync_edgetunnel()
+                print("[AutoSync] Sync completed")
         except Exception as e:
             print(f"[AutoSync] Error: {e}")
 
@@ -732,6 +752,7 @@ def load_edgetunnel_config():
     defaults = {
         "EDGETUNNEL_ENABLED": False,
         "AUTO_SYNC": False,
+        "AUTO_SYNC_AFTER_MANUAL_TEST": False,
         "EDGETUNNEL_URL": "",
         "EDGETUNNEL_API_KEY": "",
         "EDGETUNNEL_SYNC_INTERVAL_MIN": 60,
@@ -1697,7 +1718,11 @@ def api_github_sync_latest():
 
 @app.route("/run/<int:run_id>")
 def run_detail(run_id):
-    return render_template("run_detail.html", run_id=run_id)
+    conn = get_db()
+    row = conn.execute("SELECT COUNT(*) as cnt FROM runs WHERE id <= ?", (run_id,)).fetchone()
+    display_num = row["cnt"] if row else 0
+    conn.close()
+    return render_template("run_detail.html", run_id=run_id, display_num=display_num)
 
 # ---------------------------------------------------------------------------
 # Main
