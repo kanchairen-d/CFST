@@ -452,19 +452,19 @@ runner = SpeedTestRunner()
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", page_title="仪表盘")
 
 @app.route("/speedtest")
 def speedtest():
-    return render_template("speedtest.html")
+    return render_template("speedtest.html", page_title="测速")
 
 @app.route("/history")
 def history():
-    return render_template("history.html")
+    return render_template("history.html", page_title="历史")
 
 @app.route("/settings")
 def settings():
-    return render_template("settings.html")
+    return render_template("settings.html", page_title="设置")
 
 # ---------------------------------------------------------------------------
 # API Routes
@@ -712,11 +712,13 @@ def stream():
             except queue.Empty:
                 break
         yield f"data: {json.dumps({'type': 'done', 'run_id': run_id})}\n\n"
-        # Auto sync to Edgetunnel after test completes
+        # Auto sync to Edgetunnel after test completes (check manual-test toggle)
         try:
-            print("[AutoSync] Starting sync after test complete...")
-            _auto_sync_edgetunnel()
-            print("[AutoSync] Sync completed")
+            eg_cfg = load_edgetunnel_config()
+            if eg_cfg.get("AUTO_SYNC_AFTER_MANUAL_TEST"):
+                print("[AutoSync] Starting sync after manual test complete...")
+                _auto_sync_edgetunnel()
+                print("[AutoSync] Sync completed")
         except Exception as e:
             print(f"[AutoSync] Error: {e}")
 
@@ -750,6 +752,7 @@ def load_edgetunnel_config():
     defaults = {
         "EDGETUNNEL_ENABLED": False,
         "AUTO_SYNC": False,
+        "AUTO_SYNC_AFTER_MANUAL_TEST": False,
         "EDGETUNNEL_URL": "",
         "EDGETUNNEL_API_KEY": "",
         "EDGETUNNEL_SYNC_INTERVAL_MIN": 60,
@@ -1719,7 +1722,7 @@ def run_detail(run_id):
     row = conn.execute("SELECT COUNT(*) as cnt FROM runs WHERE id <= ?", (run_id,)).fetchone()
     display_num = row["cnt"] if row else 0
     conn.close()
-    return render_template("run_detail.html", run_id=run_id, display_num=display_num)
+    return render_template("run_detail.html", run_id=run_id, display_num=display_num, page_title="运行详情")
 
 # ---------------------------------------------------------------------------
 # Main

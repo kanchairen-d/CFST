@@ -17,6 +17,13 @@
         </div>
     </div>
 
+    <div class="flex items-center gap-3 mb-3 px-1">
+        <label class="flex items-center gap-1.5 text-sm cursor-pointer">
+            <input type="checkbox" id="selectAll" onchange="toggleSelectAll()" style="accent-color:#3b82f6">
+            <span style="color:var(--text-muted)">全选</span>
+        </label>
+    </div>
+
     <div id="historyCards" class="space-y-3"></div>
 
     <div id="pagination" class="flex items-center justify-center gap-3 mt-6"></div>
@@ -83,15 +90,29 @@ function loadHistory(page) {
                         <!-- Right: actions -->
                         <div class="flex items-center gap-2">
                             <a href="/run/${r.id}" class="px-3 py-1.5 text-xs text-white rounded-lg transition" style="background:#3b82f6">查看</a>
-                            <button onclick="deleteRun(${r.id})" class="px-3 py-1.5 text-xs rounded-lg transition" style="background:#fee2e2;color:#dc2626">删除</button>
+                            <button onclick="deleteRun(${r.id},${r.display_num})" class="px-3 py-1.5 text-xs rounded-lg transition" style="background:#fee2e2;color:#dc2626">删除</button>
                         </div>
                     </div>
                 </div>`;
             }).join('');
 
             // Bind checkbox change events to update count
-            document.querySelectorAll('.row-check').forEach(cb => cb.addEventListener('change', updateSelCount));
+            document.querySelectorAll('.row-check').forEach(cb => {
+                cb.addEventListener('change', function() {
+                    updateSelCount();
+                    // Uncheck selectAll if any checkbox is unchecked
+                    if (!this.checked) {
+                        document.getElementById('selectAll').checked = false;
+                    } else {
+                        const all = document.querySelectorAll('.row-check');
+                        const checked = document.querySelectorAll('.row-check:checked');
+                        document.getElementById('selectAll').checked = all.length === checked.length;
+                    }
+                });
+            });
             updateSelCount();
+            // Reset selectAll on page load
+            document.getElementById('selectAll').checked = false;
 
             // Pagination
             const pg = document.getElementById('pagination');
@@ -108,11 +129,17 @@ function loadHistory(page) {
         });
 }
 
-function deleteRun(id) {
-    if (!confirm('确定要删除运行 #' + id + ' 的记录？')) return;
+function deleteRun(id, displayNum) {
+    if (!confirm('确定要删除运行 #' + displayNum + ' 的记录？')) return;
     fetch('/api/runs/' + id, { method: 'DELETE' })
         .then(r => r.json())
         .then(() => loadHistory(currentPage));
+}
+
+function toggleSelectAll() {
+    const checked = document.getElementById('selectAll').checked;
+    document.querySelectorAll('.row-check').forEach(cb => cb.checked = checked);
+    updateSelCount();
 }
 
 function updateSelCount() {

@@ -796,7 +796,9 @@ function renderChannelsHtml(channels) {
     html += '</div></div>';
     html += '<div class="ch-config" id="ch-'+idx+'" style="'+(isEnabled?'':'display:none')+'">';
     info.fields.forEach(f => {
-      const val = cfg[f.key] || '';
+      let val = cfg[f.key];
+      if (Array.isArray(val)) val = val.join(',');
+      val = val || '';
       html += '<div class="flex items-center gap-2 mb-2">';
       html += '<span class="text-xs w-24 shrink-0" style="color:var(--text-muted)">'+f.label+'</span>';
       if (f.type === 'select') {
@@ -900,6 +902,11 @@ async function loadEdgetunnel() {
       <div class="flex items-center justify-between px-3 py-2 rounded-lg" style="background:var(--bg-page);border:1px solid var(--glass-border)">
         <span class="text-sm font-medium">启用 Edgetunnel 同步</span>
         <label class="toggle"><input type="checkbox" id="eg_enabled" ${cfg.EDGETUNNEL_ENABLED?'checked':''}>
+        <span class="toggle-track"></span></label>
+      </div>
+      <div class="flex items-center justify-between px-3 py-2 rounded-lg" style="background:var(--bg-page);border:1px solid var(--glass-border)">
+        <span class="text-sm font-medium">手动测速后自动同步 <span class="text-xs" style="color:var(--text-muted)">（测速完自动同步到 EDT）</span></span>
+        <label class="toggle"><input type="checkbox" id="eg_auto_manual" ${cfg.AUTO_SYNC_AFTER_MANUAL_TEST?'checked':''}>
         <span class="toggle-track"></span></label>
       </div>
       <hr style="border-color:var(--glass-border);margin:8px 0">
@@ -1035,6 +1042,7 @@ function toggleEpModeFromEvent(sel) {
 async function saveEdgetunnel() {
   const data = {
     EDGETUNNEL_ENABLED: document.getElementById('eg_enabled')?.checked || false,
+    AUTO_SYNC_AFTER_MANUAL_TEST: document.getElementById('eg_auto_manual')?.checked || false,
     EDGETUNNEL_ENDPOINTS: getEPs(),
   };
   try {
@@ -1049,6 +1057,7 @@ async function saveEdgetunnel() {
 async function syncNow() {
   const data = {
     EDGETUNNEL_ENABLED: document.getElementById('eg_enabled')?.checked || false,
+    AUTO_SYNC_AFTER_MANUAL_TEST: document.getElementById('eg_auto_manual')?.checked || false,
     EDGETUNNEL_ENDPOINTS: getEPs(),
   };
   document.getElementById('eg_msg').textContent = '⏳ 保存并同步中...';

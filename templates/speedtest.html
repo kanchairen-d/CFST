@@ -105,7 +105,7 @@ function startSpeedTest() {
             document.getElementById('btnStart').style.display = 'none';
             document.getElementById('btnStart').classList.remove('pulse');
             document.getElementById('btnStop').style.display = 'flex';
-            document.getElementById('runIdText').textContent = data.run_id || '?';
+            document.getElementById('runIdText').textContent = data.run_number || '?';
             document.getElementById('runIdRow').classList.remove('hidden');
             document.getElementById('logStatus').textContent = '连接中...';
             document.getElementById('statusText').textContent = '⏳ 运行中';
