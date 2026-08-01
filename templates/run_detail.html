@@ -179,7 +179,11 @@ async function loadRunDetail() {
                         const bwPct = (n.bandwidth / maxBw * 100).toFixed(0);
                         // Color: green → yellow → orange gradient based on bandwidth
                         const barColor = n.bandwidth > maxBw * 0.7 ? '#22c55e' : n.bandwidth > maxBw * 0.3 ? '#eab308' : '#f97316';
-                        const region = n.node.includes('#') ? '<span class="text-xs px-1.5 py-0.5 rounded" style="background:var(--glass-border);color:var(--text-muted)">' + n.node.split('#')[1] + '</span>' : '';
+                        function getRegionColor(code) {
+    const colors = {'SG':'#10b981','HK':'#3b82f6','JP':'#f59e0b','US':'#8b5cf6','TW':'#ef4444','KR':'#06b6d4','DE':'#6b7280','GB':'#ec4899','FR':'#14b8a6','CA':'#f97316','AU':'#84cc16','IN':'#a855f7','BR':'#e11d48','NL':'#0ea5e9','RU':'#dc2626','AE':'#d97706','SA':'#059669','ZA':'#78716c','ES':'#2563eb','IT':'#7c3aed','SE':'#0891b2','NO':'#0284c7','FI':'#0369a1','DK':'#0d9488','PL':'#9333ea','CH':'#525252','TH':'#ca8a04','VN':'#16a34a','ID':'#ea580c','MY':'#4f46e5','PH':'#db2777','MO':'#1d4ed8','AR':'#b91c1c','MX':'#d97706','CL':'#0f766e'};
+    return colors[code] || '#6366f1';
+}
+const region = n.node.includes('#') ? '<span class="text-xs px-1.5 py-0.5 rounded font-bold" style="background:' + getRegionColor(n.node.split('#')[1]) + ';color:#fff">' + n.node.split('#')[1] + '</span>' : '';
                         html += `<div class="rounded-lg p-4" style="background:var(--bg-page);border:1px solid var(--glass-border)">
                             <div class="flex items-center justify-between mb-2">
                                 <span class="text-xs font-mono truncate max-w-[140px]" title="${n.node}">${n.node.split('#')[0]}</span>

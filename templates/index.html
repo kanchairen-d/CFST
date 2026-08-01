@@ -149,11 +149,15 @@ async function loadStats() {
                         nodes.forEach((n, i) => {
                             const pct = maxBw > 0 ? (n.bandwidth / maxBw * 100) : 0;
                             const barColor = pct > 70 ? '#22c55e' : pct > 40 ? '#eab308' : '#f97316';
-                            const label = n.node.includes('#') ? n.node.split('#')[1] : '';
+                            function getRegionColor(code) {
+    const colors = {'SG':'#10b981','HK':'#3b82f6','JP':'#f59e0b','US':'#8b5cf6','TW':'#ef4444','KR':'#06b6d4','DE':'#6b7280','GB':'#ec4899','FR':'#14b8a6','CA':'#f97316','AU':'#84cc16','IN':'#a855f7','BR':'#e11d48','NL':'#0ea5e9','RU':'#dc2626','AE':'#d97706','SA':'#059669','ZA':'#78716c','ES':'#2563eb','IT':'#7c3aed','SE':'#0891b2','NO':'#0284c7','FI':'#0369a1','DK':'#0d9488','PL':'#9333ea','CH':'#525252','TH':'#ca8a04','VN':'#16a34a','ID':'#ea580c','MY':'#4f46e5','PH':'#db2777','MO':'#1d4ed8','AR':'#b91c1c','MX':'#d97706','CL':'#0f766e'};
+    return colors[code] || '#6366f1';
+}
+const label = n.node.includes('#') ? n.node.split('#')[1] : '';
                             const ipPart = n.node.split('#')[0];
                             html += '<div class="rounded-lg p-3 border" style="background:var(--bg-page);border-color:var(--glass-border)">' +
                                 '<div class="flex items-center justify-between mb-1.5">' +
-                                '<span class="font-mono text-xs font-medium truncate" title="' + n.node + '">' + (label ? '<span class="px-1.5 py-0.5 rounded text-xs font-bold mr-1" style="background:var(--accent);color:#fff">' + label + '</span>' : '') + ipPart + '</span>' +
+                                '<span class="font-mono text-xs font-medium truncate" title="' + n.node + '">' + (label ? '<span class="px-1.5 py-0.5 rounded text-xs font-bold mr-1" style="background:' + getRegionColor(label) + ';color:#fff">' + label + '</span>' : '') + ipPart + '</span>' +
                                 '<span class="font-mono text-xs font-bold" style="color:' + barColor + '">' + n.bandwidth.toFixed(1) + ' Mb</span></div>' +
                                 '<div class="flex items-center gap-2">' +
                                 '<div class="flex-1 h-2 rounded-full" style="background:var(--glass-border)">' +
